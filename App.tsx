@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity as T, Switch, ScrollView, StyleSheet, Alert, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity as T, Switch, ScrollView, StyleSheet, Alert, SafeAreaView, Platform, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { supabase as sb } from './src/supabase';
 
 const G = '#1DB954', N = '#0B2A3D', O = '#F26B21';
+const TOP = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0;
 const LBL: any = { pending: 'Pendiente', preparing: 'Preparando', ready: 'Listo para recoger', on_way: 'En camino', delivered: 'Entregado' };
 const money = (n: number) => '$' + Number(n).toLocaleString('es-CO');
 const say = (e: any) => Alert.alert('Ups', String(e?.message || e));
@@ -210,7 +211,7 @@ function Root() {
   );
   const View_ = me.role === 'cliente' ? Cliente : me.role === 'comercio' ? Comercio : Repartidor;
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: TOP }}>
       <StatusBar style="dark" />
       <View style={s.top}><Text style={{ fontWeight: '900', color: N, fontSize: 18 }}>Cerquita · {me.role}</Text><T onPress={() => sb.auth.signOut()}><Text style={{ color: O, fontWeight: '700' }}>Salir</Text></T></View>
       <View_ me={me} />
