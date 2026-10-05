@@ -3,10 +3,8 @@ import { View, Text, TextInput, TouchableOpacity as T, Switch, ScrollView, Style
 import { StatusBar } from 'expo-status-bar';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';
 import { supabase as sb } from './src/supabase';
 
-Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
 const G = '#1DB954', N = '#0B2A3D', O = '#F26B21';
 const LBL: any = { pending: 'Pendiente', preparing: 'Preparando', ready: 'Listo para recoger', on_way: 'En camino', delivered: 'Entregado' };
 const money = (n: number) => '$' + Number(n).toLocaleString('es-CO');
@@ -22,7 +20,7 @@ function useOrders() {
     load();
     const ch = sb.channel('o' + Math.random()).on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (p: any) => {
       if (p.new?.status && p.new.status !== p.old?.status)
-        Notifications.scheduleNotificationAsync({ content: { title: 'Cerquita', body: `Pedido ${LBL[p.new.status]}` }, trigger: null });
+        Alert.alert('Cerquita', `Pedido ${LBL[p.new.status]}`);
       load();
     }).subscribe();
     return () => { sb.removeChannel(ch); };
@@ -119,7 +117,7 @@ function Comercio({ me }: any) {
   }
   async function addProd() { const { error } = await sb.from('products').insert({ store_id: store.id, name: pn, price: parseInt(pp) }); error ? say(error) : (setPn(''), setPp(''), Alert.alert('Producto agregado')); }
   const set = (id: string, status: string) => sb.from('orders').update({ status }).eq('id', id).then(({ error }) => error && say(error));
-  if (store === undefined) return null;
+  if (store === undefined) return <Text style={{ padding: 16 }}>Cargando tu comercio…</Text>;
   if (!store) return <View style={{ padding: 16 }}><Text style={s.h}>Crea tu comercio</Text><Inp placeholder="Nombre del comercio" value={n} onChangeText={setN} /><Inp placeholder="Dirección" value={a} onChangeText={setA} /><Btn t="Crear comercio" on={createStore} /></View>;
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -178,23 +176,38 @@ function Repartidor({ me }: any) {
   );
 }
 
-export default function App() {
+function Root() {
   const [session, setSession] = useState<any>(null);
   const [me, setMe] = useState<any>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    Notifications.requestPermissionsAsync();
     sb.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
     const { data } = sb.auth.onAuthStateChange((_e, sess) => setSession(sess));
     return () => data.subscription.unsubscribe();
   }, []);
+  const [perr, setPerr] = useState('');
   useEffect(() => {
-    if (!session) return setMe(null);
-    sb.from('profiles').select('*').eq('id', session.user.id).single().then(({ data }) => setMe(data));
+    if (!session) { setMe(null); return; }
+    let alive = true;
+    (async () => {
+      for (let i = 0; i < 4; i++) {
+        const { data, error } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+        if (data) { if (alive) { setMe(data); setPerr(''); } return; }
+        if (i === 3 && alive) setPerr(error?.message || 'No se encontró tu perfil');
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    })();
+    return () => { alive = false; };
   }, [session]);
-  if (!ready) return null;
+  if (!ready) return <View style={[s.center, { backgroundColor: N }]}><Text style={s.logo}>Cerquita</Text></View>;
   if (!session) return <Auth />;
-  if (!me) return null;
+  if (!me) return (
+    <SafeAreaView style={[s.center, { backgroundColor: N }]}>
+      <Text style={s.logo}>Cerquita</Text>
+      <Text style={{ color: '#fff', marginVertical: 16, textAlign: 'center' }}>{perr || 'Cargando tu perfil…'}</Text>
+      {!!perr && <Btn t="Salir" on={() => sb.auth.signOut()} c={O} />}
+    </SafeAreaView>
+  );
   const View_ = me.role === 'cliente' ? Cliente : me.role === 'comercio' ? Comercio : Repartidor;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
@@ -204,6 +217,23 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
+class ErrorBoundary extends React.Component<any, { err: any }> {
+  state = { err: null as any };
+  static getDerivedStateFromError(err: any) { return { err }; }
+  render() {
+    if (this.state.err) return (
+      <SafeAreaView style={[s.center, { backgroundColor: N }]}>
+        <Text style={s.logo}>Cerquita</Text>
+        <Text style={{ color: '#fff', marginVertical: 16, textAlign: 'center' }}>Ocurrió un error: {String(this.state.err?.message || this.state.err)}</Text>
+        <Btn t="Reintentar" on={() => this.setState({ err: null })} />
+      </SafeAreaView>
+    );
+    return this.props.children;
+  }
+}
+
+export default function App() { return <ErrorBoundary><Root /></ErrorBoundary>; }
 
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
