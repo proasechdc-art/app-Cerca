@@ -173,7 +173,7 @@ function Comercio({ me }: any) {
   async function addProd() { const { error } = await sb.from('products').insert({ store_id: store.id, name: pn, price: parseInt(pp) }); error ? say(error) : (setPn(''), setPp(''), Alert.alert('Producto agregado')); }
   const set = (id: string, status: string) => sb.from('orders').update({ status }).eq('id', id).then(({ error }) => { if (error) say(error); reload(); });
   if (store === undefined) return <Text style={{ padding: 16 }}>Cargando tu comercio…</Text>;
-  if (!store) return <View style={{ padding: 16 }}><Text style={s.h}>Crea tu comercio</Text><Inp placeholder="Nombre del comercio" value={n} onChangeText={setN} /><Inp placeholder="Dirección" value={a} onChangeText={setA} /><Btn t="Crear comercio" on={createStore} /></View>;
+  if (!store) return <View style={{ padding: 16 }}><Text style={s.h}>Crea tu comercio</Text><Text style={{ marginBottom: 10 }}>Esta cuenta aún no tiene comercio. Si ya creaste uno, entra con la cuenta que lo creó.</Text><Inp placeholder="Nombre del comercio" value={n} onChangeText={setN} /><Inp placeholder="Dirección" value={a} onChangeText={setA} /><Btn t="Crear comercio" on={createStore} /></View>;
   const mine = orders.filter((o) => o.store_id === store.id);
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
@@ -266,7 +266,7 @@ function Repartidor({ me }: any) {
             <Text>{money(o.total)}{pos && o.stores?.lat != null ? ` · ${km(pos, { latitude: o.stores.lat, longitude: o.stores.lng }).toFixed(1)} km al comercio` : ''}</Text>
             <Btn t="Aceptar pedido" on={() => accept(o.id)} />
           </View>))}
-        {!avail.length && <Text>Todavía no hay pedidos listos. Se actualizan solos.</Text>}
+        {!avail.length && <Text>Todavía no hay pedidos listos. Aparecen aquí cuando el comercio los marca como "Listo para recoger".</Text>}
       </>}
     </ScrollView>
   );
@@ -309,7 +309,7 @@ function Root() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: TOP }}>
       <StatusBar style="dark" />
       <View style={s.top}><Text style={{ fontWeight: '900', color: N, fontSize: 18 }}>Cerquita · {me.role}</Text><T onPress={() => sb.auth.signOut()}><Text style={{ color: O, fontWeight: '700' }}>Salir</Text></T></View>
-      <View_ me={me} />
+      <Text style={{ color: '#666', fontSize: 12, paddingHorizontal: 16, paddingTop: 6 }}>{session.user.email}</Text><View_ me={me} />
     </SafeAreaView>
   );
 }
