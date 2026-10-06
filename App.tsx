@@ -188,8 +188,8 @@ function Comercio({ me }: any) {
           <Text style={s.b}>{o.items.map((i: any) => i.name).join(', ')} · {money(o.total)}</Text>
           <Text>Entregar en: {o.address}</Text>
           <Text style={{ color: O, fontWeight: '800', marginBottom: 6 }}>{LBL[o.status]}</Text>
-          {o.status === 'pending' && <Btn t="Aceptar y preparar" on={() => set(o.id, 'preparing')} />}
-          {o.status === 'preparing' && <Btn t="Listo para recoger" on={() => set(o.id, 'ready')} />}
+          {o.status === 'pending' && <Btn t="Aceptar pedido y empezar a preparar" on={() => set(o.id, 'preparing')} />}
+          {o.status === 'preparing' && <Btn t="Marcar como listo para recoger" on={() => set(o.id, 'ready')} />}
         </View>))}
     </ScrollView>
   );
@@ -256,7 +256,7 @@ function Repartidor({ me }: any) {
           <Text>1. Recoge en: {active.stores?.name} — {active.stores?.address}</Text>
           <Text>2. Entrega en: {active.address}</Text>
           <Text style={{ marginVertical: 4 }}>{money(active.total)}</Text>
-          <Btn t="Pedido entregado" on={() => done(active.id)} />
+          <Btn t="Marcar como entregado" on={() => done(active.id)} />
         </View>)}
       {online && !active && <>
         <Text style={s.h}>Pedidos disponibles</Text>
