@@ -1,0 +1,232 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity as T, ScrollView, Alert } from 'react-native';
+import * as Location from 'expo-location';
+import { supabase as sb } from './supabase';
+import { s, G, N, O, CATS, CT, catOf, money, say, ago, shortId, itemsTxt, info, getPos, useOrders, Ico, Btn, Btn2, Inp, Vacio, Logo, Bell, TabBar, Perfil, OrderMap, Stars, Track } from './ui';
+
+export function Cliente({ me, email }: any) {
+  const [orders, reload] = useOrders();
+  const [tab, setTab] = useState('inicio');
+  const [stores, setStores] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({});
+  const [favs, setFavs] = useState<string[]>([]);
+  const [reviewed, setReviewed] = useState<string[]>([]);
+  const [store, setStore] = useState<any>(null);
+  const [prods, setProds] = useState<any[]>([]);
+  const [cart, setCart] = useState<any>({});
+  const [addr, setAddr] = useState('');
+  const [sending, setSending] = useState(false);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('');
+  const [here, setHere] = useState('Mi ubicación');
+  const [rate, setRate] = useState<any>(null);
+  const [rs, setRs] = useState(0);
+  const [rc, setRc] = useState(0);
+
+  const loadAll = useCallback(async () => {
+    const [a, b, c, d] = await Promise.all([
+      sb.from('stores').select('*'),
+      sb.rpc('store_stats'),
+      sb.from('favorites').select('store_id').eq('customer_id', me.id),
+      sb.from('reviews').select('order_id').eq('customer_id', me.id),
+    ]);
+    setStores(a.data || []);
+    const m: any = {}; (b.data || []).forEach((x: any) => { m[x.store_id] = x; }); setStats(m);
+    setFavs((c.data || []).map((x: any) => x.store_id));
+    setReviewed((d.data || []).map((x: any) => x.order_id));
+  }, []);
+  useEffect(() => { loadAll(); }, [tab]);
+  useEffect(() => {
+    (async () => {
+      const c = await getPos(); if (!c) return;
+      try {
+        const r = await Location.reverseGeocodeAsync(c); const a: any = r[0];
+        const t = a ? ([a.street, a.streetNumber].filter(Boolean).join(' ') || a.name || '') : '';
+        if (t) setHere(t);
+      } catch {}
+    })();
+  }, []);
+
+  const go = (k: string) => { setStore(null); setTab(k); };
+  async function toggleFav(st: any) {
+    const on = favs.includes(st.id);
+    setFavs(on ? favs.filter((x) => x !== st.id) : [...favs, st.id]);
+    const { error } = on
+      ? await sb.from('favorites').delete().eq('customer_id', me.id).eq('store_id', st.id)
+      : await sb.from('favorites').insert({ customer_id: me.id, store_id: st.id });
+    if (error) { say(error); loadAll(); }
+  }
+  async function open(st: any) {
+    if (st.is_open === false) return Alert.alert('Comercio cerrado', 'Este comercio no recibe pedidos por ahora.');
+    setStore(st); setCart({});
+    const { data } = await sb.from('products').select('*').eq('store_id', st.id);
+    setProds(data || []);
+  }
+  const setQty = (id: string, d: number) => setCart({ ...cart, [id]: Math.max(0, (cart[id] || 0) + d) });
+  const lines = prods.filter((p) => cart[p.id] > 0).map((p) => ({ id: p.id, name: p.name, price: p.price, qty: cart[p.id] }));
+  const total = lines.reduce((a, l) => a + l.price * l.qty, 0);
+  async function order() {
+    if (!lines.length) return Alert.alert('Elige al menos un producto', 'Toca el + de un producto para agregarlo.');
+    if (!addr.trim()) return Alert.alert('Falta tu dirección', 'Escribe la dirección de entrega.');
+    setSending(true);
+    try {
+      const c = await getPos();
+      if (!c) { Alert.alert('No pude ubicarte', 'Activa el GPS, da permiso de ubicación a Cerquita y vuelve a intentar.'); return; }
+      const { error } = await sb.from('orders').insert({ store_id: store.id, customer_id: me.id, items: lines, total, address: addr.trim(), dest_lat: c.latitude, dest_lng: c.longitude });
+      if (error) { say(error); return; }
+      Alert.alert('Pedido enviado', 'El comercio ya lo recibió.');
+      setStore(null); setCart({}); setAddr(''); reload(); setTab('pedidos');
+    } catch (e) { say(e); } finally { setSending(false); }
+  }
+  async function sendReview() {
+    if (!rs) return Alert.alert('Elige las estrellas', 'Califica el comercio de 1 a 5 estrellas.');
+    const { error } = await sb.from('reviews').insert({ order_id: rate.id, customer_id: me.id, store_id: rate.store_id, courier_id: rate.courier_id, store_rating: rs, courier_rating: rc || null });
+    if (error) return say(error);
+    setRate(null); setRs(0); setRc(0);
+    Alert.alert('¡Gracias!', 'Tu calificación quedó guardada.');
+    loadAll();
+  }
+
+  const mine = orders.filter((o) => o.customer_id === me.id);
+  const activos = mine.filter((o) => o.status !== 'delivered').length;
+  const lista = stores.filter((st) => (!cat || catOf(st).k === cat) && (!q.trim() || (st.name + ' ' + (st.address || '')).toLowerCase().includes(q.trim().toLowerCase())));
+  const favList = stores.filter((st) => favs.includes(st.id));
+  const card = (st: any) => (
+    <T key={st.id} style={[s.card, s.rowc]} onPress={() => open(st)}>
+      <View style={[s.avatarS, { backgroundColor: catOf(st).c }]}><Ico n={catOf(st).i} c="#fff" z={24} /></View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={s.b}>{st.name}</Text>
+        <Text numberOfLines={1} style={{ color: '#666' }}>{st.address}</Text>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: st.is_open === false ? '#D32F2F' : G }}>{st.is_open === false ? 'Cerrado' : 'Abierto'}  <Text style={{ color: '#666', fontWeight: '600' }}>{info(stats[st.id])}</Text></Text>
+      </View>
+      <T onPress={() => toggleFav(st)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ico n={favs.includes(st.id) ? 'heart' : 'heart-outline'} c={favs.includes(st.id) ? '#E8467C' : '#9AA7AF'} z={26} /></T>
+    </T>
+  );
+
+  let body: any;
+  if (store) body = (
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+      <T onPress={() => setStore(null)} style={s.rowc}><Ico n="chevron-left" c={O} z={26} /><Text style={{ color: O, fontWeight: '700' }}>Volver</Text></T>
+      <View style={[s.card, s.rowc, { marginTop: 8 }]}>
+        <View style={[s.avatarS, { width: 56, height: 56, backgroundColor: catOf(store).c }]}><Ico n={catOf(store).i} c="#fff" z={30} /></View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[s.h, { marginBottom: 2 }]}>{store.name}</Text>
+          <Text numberOfLines={1} style={{ color: '#666' }}>{catOf(store).t} • {store.address}</Text>
+          <Text style={{ color: G, fontWeight: '700', fontSize: 12 }}>Abierto  <Text style={{ color: '#666', fontWeight: '600' }}>{info(stats[store.id])}</Text></Text>
+        </View>
+        <T onPress={() => toggleFav(store)}><Ico n={favs.includes(store.id) ? 'heart' : 'heart-outline'} c={favs.includes(store.id) ? '#E8467C' : '#9AA7AF'} z={28} /></T>
+      </View>
+      <Text style={s.h}>Productos</Text>
+      {prods.map((p) => (
+        <View key={p.id} style={[s.card, s.row]}>
+          <View style={{ flex: 1 }}><Text style={s.b}>{p.name}</Text><Text style={{ color: G, fontWeight: '800' }}>{money(p.price)}</Text></View>
+          {cart[p.id] > 0 ? (
+            <View style={s.rowc}>
+              <T onPress={() => setQty(p.id, -1)} style={s.qbtn}><Ico n="minus" c="#fff" z={20} /></T>
+              <Text style={{ marginHorizontal: 10, fontWeight: '800', fontSize: 16 }}>{cart[p.id]}</Text>
+              <T onPress={() => setQty(p.id, 1)} style={s.qbtn}><Ico n="plus" c="#fff" z={20} /></T>
+            </View>
+          ) : (
+            <T onPress={() => setQty(p.id, 1)} style={s.qbtn}><Ico n="plus" c="#fff" z={20} /></T>
+          )}
+        </View>))}
+      {!prods.length && <Text>Este comercio aún no tiene productos.</Text>}
+      <View style={[s.card, { backgroundColor: '#E8F7EE', marginTop: 6 }]}>
+        <Text style={s.b}>Tu pedido</Text>
+        {lines.map((l) => <View key={l.id} style={s.row}><Text>{l.qty}x {l.name}</Text><Text>{money(l.price * l.qty)}</Text></View>)}
+        {!lines.length && <Text>Aún no has elegido productos.</Text>}
+        <View style={[s.row, { marginTop: 6 }]}><Text style={{ fontWeight: '900', color: N }}>Total</Text><Text style={{ fontWeight: '900', color: G, fontSize: 18 }}>{money(total)}</Text></View>
+      </View>
+      <Inp placeholder="Tu dirección de entrega" value={addr} onChangeText={setAddr} />
+      <Btn t={sending ? 'Enviando…' : 'Hacer pedido'} on={sending ? () => {} : order} />
+    </ScrollView>
+  );
+  else if (tab === 'inicio') body = (
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <View style={s.row}>
+        <Logo k={0.8} />
+        <View style={s.rowc}>
+          <View style={{ marginRight: 8, maxWidth: 110 }}>
+            <View style={s.rowc}><Ico n="map-marker" c={G} z={16} /><Text style={{ fontSize: 10, color: '#666', marginLeft: 2 }}>Mi ubicación</Text></View>
+            <Text numberOfLines={1} style={{ fontWeight: '800', color: N, fontSize: 12 }}>{here}</Text>
+          </View>
+          <Bell n={activos} on={() => go('pedidos')} />
+        </View>
+      </View>
+      <View style={s.search}>
+        <Ico n="magnify" c="#7A8A94" z={22} />
+        <TextInput style={{ flex: 1, marginLeft: 8 }} placeholder="¿Qué quieres pedir hoy?" placeholderTextColor="#8A98A1" value={q} onChangeText={setQ} />
+      </View>
+      <View style={s.grid}>
+        {CATS.map((c) => (
+          <T key={c.k} style={s.cat} onPress={() => c.soon ? Alert.alert('Próximamente', `${c.t} llegará pronto a Cerquita.`) : setCat(cat === c.k ? '' : c.k)}>
+            <View style={[s.catI, { backgroundColor: c.c }, cat === c.k && { borderWidth: 3, borderColor: N }]}><Ico n={c.i} c="#fff" z={28} /></View>
+            <Text style={s.catT}>{c.t}</Text>
+          </T>))}
+      </View>
+      <View style={{ backgroundColor: N, borderRadius: 18, padding: 18, flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>Todo lo que necesitas</Text>
+          <Text style={{ color: G, fontSize: 18, fontWeight: '900' }}>en un solo lugar</Text>
+          <Text style={{ color: '#BFD3DD', fontSize: 11, marginTop: 6 }}>Rápido • Seguro • Cerca de ti</Text>
+        </View>
+        <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: G, alignItems: 'center', justifyContent: 'center' }}><Ico n="moped" c="#fff" z={52} /></View>
+      </View>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', marginVertical: 10 }}>
+        {[0, 1, 2, 3, 4].map((i) => <View key={i} style={{ width: 7, height: 7, borderRadius: 4, marginHorizontal: 3, backgroundColor: i === 0 ? G : '#CBD5DA' }} />)}
+      </View>
+      {!!favList.length && <>
+        <Text style={s.h}>Tus favoritos</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+          {favList.map((st) => (
+            <T key={st.id} onPress={() => open(st)} style={{ width: 140, marginRight: 10, backgroundColor: '#F7F9FA', borderRadius: 14, overflow: 'hidden' }}>
+              <View style={{ height: 70, backgroundColor: catOf(st).c, alignItems: 'center', justifyContent: 'center' }}><Ico n={catOf(st).i} c="#fff" z={34} /></View>
+              <View style={{ padding: 10 }}>
+                <Text numberOfLines={1} style={s.b}>{st.name}</Text>
+                <Text style={{ color: '#666', fontSize: 12 }}>{info(stats[st.id])}</Text>
+                <Text style={{ color: '#666', fontSize: 11 }}>{catOf(st).t}</Text>
+              </View>
+            </T>))}
+        </ScrollView>
+      </>}
+      <Text style={s.h}>{cat ? catOf({ category: cat }).t : 'Comercios cerca de ti'}</Text>
+      {lista.map(card)}
+      {!lista.length && <Text>No encontramos comercios con esa búsqueda.</Text>}
+    </ScrollView>
+  );
+  else if (tab === 'pedidos') body = (
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
+      <Text style={s.h}>Mis pedidos</Text>
+      {rate && (
+        <View style={[s.card, { backgroundColor: '#FFF8F1', borderWidth: 1, borderColor: O }]}>
+          <Text style={s.h}>Califica tu pedido</Text>
+          <Text style={s.b}>{rate.stores?.name}</Text>
+          <Stars v={rs} set={setRs} />
+          {!!rate.courier_id && <><Text style={[s.b, { marginTop: 8 }]}>Tu repartidor</Text><Stars v={rc} set={setRc} /></>}
+          <View style={{ flexDirection: 'row', marginTop: 10, marginHorizontal: -4 }}>
+            <Btn2 t="Cancelar" c="#EDEDED" tc="#555" on={() => setRate(null)} />
+            <Btn2 t="Enviar" on={sendReview} />
+          </View>
+        </View>)}
+      {!mine.length && <Text>Todavía no has hecho pedidos.</Text>}
+      {mine.map((o) => (
+        <View key={o.id} style={s.card}>
+          <View style={s.row}><Text style={s.b}>{o.stores?.name}</Text><Text style={{ color: G, fontWeight: '900' }}>{money(o.total)}</Text></View>
+          <Text style={{ color: '#555' }}>{itemsTxt(o.items)}</Text>
+          <Text style={{ color: '#888', fontSize: 11 }}>{shortId(o.id)} · {ago(o.created_at)}</Text>
+          <Track st={o.status} />
+          {o.status !== 'delivered' && <OrderMap o={o} />}
+          {o.status === 'delivered' && !reviewed.includes(o.id) && <Btn t="Calificar mi pedido" on={() => { setRate(o); setRs(0); setRc(0); }} />}
+          {o.status === 'delivered' && reviewed.includes(o.id) && <Text style={{ color: G, fontWeight: '700', marginTop: 4 }}>✓ Ya calificaste este pedido</Text>}
+        </View>))}
+    </ScrollView>
+  );
+  else if (tab === 'favoritos') body = favList.length ? (
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
+      <Text style={s.h}>Tus favoritos</Text>
+      {favList.map(card)}
+    </ScrollView>
+  ) : <Vacio i="heart-outline" t="Favoritos" d="Toca el corazón de un comercio para guardarlo aquí." />;
+  else body = <Perfil me={me} email={email} />;
+  return <View style={{ flex: 1 }}><View style={{ flex: 1 }}>{body}</View><TabBar tabs={CT} tab={tab} go={go} /></View>;
+}
