@@ -6,6 +6,7 @@ import { s, G, N, O, TOP, say, Logo, Btn, Inp } from './src/ui';
 import { Cliente } from './src/Cliente';
 import { Comercio } from './src/Comercio';
 import { Repartidor } from './src/Repartidor';
+import { Admin } from './src/Admin';
 
 function Auth() {
   const [signup, setSignup] = useState(false);
@@ -66,7 +67,7 @@ function Root() {
       {!!perr && <Btn t="Salir" on={() => sb.auth.signOut()} c={O} />}
     </SafeAreaView>
   );
-  const View_ = me.role === 'cliente' ? Cliente : me.role === 'comercio' ? Comercio : Repartidor;
+  const View_ = me.role === 'cliente' ? Cliente : me.role === 'comercio' ? Comercio : me.role === 'admin' ? Admin : Repartidor;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: TOP }}>
       <StatusBar style="dark" />

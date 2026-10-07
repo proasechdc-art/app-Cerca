@@ -9,6 +9,8 @@ export function Comercio({ me, email }: any) {
   const [store, setStore] = useState<any>(undefined);
   const [prods, setProds] = useState<any[]>([]);
   const [rt, setRt] = useState<any>(null);
+  const [bal, setBal] = useState<any>(null);
+  const [liqs, setLiqs] = useState<any[]>([]);
   const [n, setN] = useState(''); const [a, setA] = useState(''); const [cat, setCat] = useState('restaurantes');
   const [pn, setPn] = useState(''); const [pp, setPp] = useState('');
   useEffect(() => { sb.from('stores').select('*').eq('owner_id', me.id).maybeSingle().then(({ data }) => setStore(data || null)); }, []);
@@ -21,7 +23,9 @@ export function Comercio({ me, email }: any) {
   useEffect(() => {
     if (!store) return;
     sb.rpc('store_stats').then(({ data }) => setRt((data || []).find((x: any) => x.store_id === store.id) || null));
-  }, [store?.id, orders.length]);
+    sb.rpc('my_balance').then(({ data }) => setBal(data));
+    sb.from('settlements').select('*').order('created_at', { ascending: false }).limit(10).then(({ data }) => setLiqs(data || []));
+  }, [store?.id, orders.length, tab]);
   async function createStore() {
     if (!n.trim()) return Alert.alert('Falta el nombre', 'Escribe el nombre de tu comercio.');
     const c = await getPos();
@@ -45,7 +49,7 @@ export function Comercio({ me, email }: any) {
   if (store === undefined) return <Vacio i="clock-outline" t="Cargando…" d="" />;
   const mine = store ? orders.filter((o) => o.store_id === store.id) : [];
   const hoy = mine.filter((o) => isToday(o.created_at));
-  const ventas = hoy.reduce((a2, o) => a2 + o.total, 0);
+  const ventas = hoy.reduce((a2, o) => a2 + (o.subtotal ?? o.total), 0);
   const pendientes = mine.filter((o) => o.status === 'pending').length;
   const Acciones = ({ o }: any) => (<>
     {o.status === 'pending' && <Btn t="Aceptar pedido y empezar a preparar" on={() => setSt(o.id, 'preparing')} />}
@@ -110,10 +114,11 @@ export function Comercio({ me, email }: any) {
       {!mine.length && <Text>Aún no te han hecho pedidos.</Text>}
       {mine.map((o) => (
         <View key={o.id} style={s.card}>
-          <View style={s.row}><Text style={s.b}>{shortId(o.id)} · {money(o.total)}</Text><Text style={{ color: '#888', fontSize: 11 }}>{ago(o.created_at)}</Text></View>
+          <View style={s.row}><Text style={s.b}>{shortId(o.id)} · {money(o.subtotal ?? o.total)}</Text><Text style={{ color: '#888', fontSize: 11 }}>{ago(o.created_at)}</Text></View>
           <Text>{itemsTxt(o.items)}</Text>
           <Text style={{ color: '#666', marginVertical: 4 }}>Entregar en: {o.address}</Text>
-          <Chip st={o.status} />
+          <Text style={{ color: G, fontWeight: '700' }}>Recibes {money(o.merchant_amount ?? o.total)} (comisión {o.commission_pct ?? 0}%: {money(o.commission_amount ?? 0)})</Text>
+          <View style={{ marginTop: 6 }}><Chip st={o.status} /></View>
           <View style={{ marginTop: 6 }}><Acciones o={o} /></View>
         </View>))}
     </ScrollView>
@@ -135,16 +140,28 @@ export function Comercio({ me, email }: any) {
   );
   else if (tab === 'stats') {
     const entregados = mine.filter((o) => o.status === 'delivered');
-    const tot = entregados.reduce((a2, o) => a2 + o.total, 0);
     body = (
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
         <Text style={s.h}>Estadísticas</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
           <Stat i="shopping-outline" c={O} v={mine.length} l="Pedidos totales" />
           <Stat i="check-circle-outline" c={G} v={entregados.length} l="Entregados" />
-          <Stat i="cash" c={G} v={money(tot)} l="Ventas entregadas" />
-          <Stat i="receipt" c={B} v={entregados.length ? money(Math.round(tot / entregados.length)) : '—'} l="Ticket promedio" />
+          <Stat i="cash" c={G} v={money(bal?.merchant_sales || 0)} l="Ventas" />
+          <Stat i="percent" c={O} v={money(bal?.merchant_commissions || 0)} l="Comisiones" />
+          <Stat i="wallet-outline" c={B} v={money(bal?.merchant_net || 0)} l="Neto" />
+          <Stat i="check-decagram" c={G} v={money(bal?.merchant_settled || 0)} l="Liquidado" />
         </View>
+        <View style={[s.card, { backgroundColor: '#FFF8F1' }]}>
+          <Text style={s.b}>Pendiente por liquidar</Text>
+          <Text style={{ fontSize: 24, fontWeight: '900', color: O }}>{money(bal?.merchant_pending || 0)}</Text>
+        </View>
+        <Text style={[s.h, { marginTop: 8 }]}>Mis liquidaciones</Text>
+        {!liqs.length && <Text>Aún no tienes liquidaciones.</Text>}
+        {liqs.map((l) => (
+          <View key={l.id} style={[s.card, s.row]}>
+            <View><Text style={s.b}>{money(l.net_amount)}</Text><Text style={{ color: '#888', fontSize: 11 }}>{ago(l.created_at)}</Text></View>
+            <Text style={{ fontWeight: '800', color: l.status === 'PAGADA' ? G : O }}>{l.status}</Text>
+          </View>))}
       </ScrollView>
     );
   } else body = <Perfil me={me} email={email} />;

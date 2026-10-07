@@ -22,6 +22,7 @@ export function Cliente({ me, email }: any) {
   const [rate, setRate] = useState<any>(null);
   const [rs, setRs] = useState(0);
   const [rc, setRc] = useState(0);
+  const [fee, setFee] = useState(0);
 
   const loadAll = useCallback(async () => {
     const [a, b, c, d] = await Promise.all([
@@ -31,6 +32,7 @@ export function Cliente({ me, email }: any) {
       sb.from('reviews').select('order_id').eq('customer_id', me.id),
     ]);
     setStores(a.data || []);
+    sb.from('finance_settings').select('courier_fee').eq('id', 1).maybeSingle().then(({ data }) => setFee(data?.courier_fee || 0));
     const m: any = {}; (b.data || []).forEach((x: any) => { m[x.store_id] = x; }); setStats(m);
     setFavs((c.data || []).map((x: any) => x.store_id));
     setReviewed((d.data || []).map((x: any) => x.order_id));
@@ -64,7 +66,8 @@ export function Cliente({ me, email }: any) {
   }
   const setQty = (id: string, d: number) => setCart({ ...cart, [id]: Math.max(0, (cart[id] || 0) + d) });
   const lines = prods.filter((p) => cart[p.id] > 0).map((p) => ({ id: p.id, name: p.name, price: p.price, qty: cart[p.id] }));
-  const total = lines.reduce((a, l) => a + l.price * l.qty, 0);
+  const subtotal = lines.reduce((a, l) => a + l.price * l.qty, 0);
+  const total = subtotal + (lines.length ? fee : 0);
   async function order() {
     if (!lines.length) return Alert.alert('Elige al menos un producto', 'Toca el + de un producto para agregarlo.');
     if (!addr.trim()) return Alert.alert('Falta tu dirección', 'Escribe la dirección de entrega.');
@@ -135,7 +138,11 @@ export function Cliente({ me, email }: any) {
         <Text style={s.b}>Tu pedido</Text>
         {lines.map((l) => <View key={l.id} style={s.row}><Text>{l.qty}x {l.name}</Text><Text>{money(l.price * l.qty)}</Text></View>)}
         {!lines.length && <Text>Aún no has elegido productos.</Text>}
-        <View style={[s.row, { marginTop: 6 }]}><Text style={{ fontWeight: '900', color: N }}>Total</Text><Text style={{ fontWeight: '900', color: G, fontSize: 18 }}>{money(total)}</Text></View>
+        <View style={[s.row, { marginTop: 6 }]}><Text>Subtotal</Text><Text>{money(subtotal)}</Text></View>
+        <View style={s.row}><Text>Domicilio</Text><Text>{money(lines.length ? fee : 0)}</Text></View>
+        <View style={[s.row, { marginTop: 4 }]}><Text style={{ fontWeight: '900', color: N }}>Total a pagar</Text><Text style={{ fontWeight: '900', color: G, fontSize: 18 }}>{money(total)}</Text></View>
+        <View style={[s.rowc, { marginTop: 8 }]}><Ico n="cash" c={G} z={20} /><Text style={{ marginLeft: 6, fontWeight: '700' }}>Pago en efectivo al recibir</Text></View>
+        <Text style={{ color: '#888', fontSize: 11 }}>El pago electrónico estará disponible muy pronto.</Text>
       </View>
       <Inp placeholder="Tu dirección de entrega" value={addr} onChangeText={setAddr} />
       <Btn t={sending ? 'Enviando…' : 'Hacer pedido'} on={sending ? () => {} : order} />
@@ -214,6 +221,7 @@ export function Cliente({ me, email }: any) {
           <View style={s.row}><Text style={s.b}>{o.stores?.name}</Text><Text style={{ color: G, fontWeight: '900' }}>{money(o.total)}</Text></View>
           <Text style={{ color: '#555' }}>{itemsTxt(o.items)}</Text>
           <Text style={{ color: '#888', fontSize: 11 }}>{shortId(o.id)} · {ago(o.created_at)}</Text>
+          <Text style={{ color: '#666', fontSize: 12 }}>Subtotal {money(o.subtotal ?? o.total)} + Domicilio {money(o.delivery_fee || 0)} · {o.payment_method === 'cash' ? 'Efectivo' : 'Electrónico'}</Text>
           <Track st={o.status} />
           {o.status !== 'delivered' && <OrderMap o={o} />}
           {o.status === 'delivered' && !reviewed.includes(o.id) && <Btn t="Calificar mi pedido" on={() => { setRate(o); setRs(0); setRc(0); }} />}

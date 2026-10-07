@@ -24,6 +24,7 @@ export const CT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: '
 export const MT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'productos', t: 'Productos', i: 'storefront-outline' }, { k: 'stats', t: 'Estadísticas', i: 'chart-bar' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 export const RT = [{ k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'mapa', t: 'Mapa', i: 'map-outline' }, { k: 'ganancias', t: 'Ganancias', i: 'cash' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 
+export const AT = [{ k: 'resumen', t: 'Resumen', i: 'view-dashboard-outline' }, { k: 'liquidar', t: 'Liquidar', i: 'cash-multiple' }, { k: 'liquidaciones', t: 'Liquidaciones', i: 'file-document-outline' }, { k: 'auditoria', t: 'Auditoría', i: 'shield-check-outline' }, { k: 'ajustes', t: 'Ajustes', i: 'cog-outline' }];
 export const money = (n: number) => '$' + Number(n).toLocaleString('es-CO');
 export const say = (e: any) => Alert.alert('Ups', String(e?.message || e));
 export const shortId = (id: string) => '#' + id.slice(0, 4).toUpperCase();
