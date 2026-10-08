@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity as T, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity as T, ScrollView, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { supabase as sb } from './supabase';
 import { s, G, N, O, CATS, CT, catOf, money, say, ago, shortId, itemsTxt, info, getPos, useOrders, Ico, Btn, Btn2, Inp, Vacio, Logo, Bell, TabBar, Perfil, OrderMap, Stars, Track } from './ui';
@@ -23,6 +23,7 @@ export function Cliente({ me, email }: any) {
   const [rs, setRs] = useState(0);
   const [rc, setRc] = useState(0);
   const [fee, setFee] = useState(0);
+  const [pay, setPay] = useState('cash');
 
   const loadAll = useCallback(async () => {
     const [a, b, c, d] = await Promise.all([
@@ -60,7 +61,7 @@ export function Cliente({ me, email }: any) {
   }
   async function open(st: any) {
     if (st.is_open === false) return Alert.alert('Comercio cerrado', 'Este comercio no recibe pedidos por ahora.');
-    setStore(st); setCart({});
+    setStore(st); setCart({}); setPay('cash');
     const { data } = await sb.from('products').select('*').eq('store_id', st.id);
     setProds(data || []);
   }
@@ -68,6 +69,17 @@ export function Cliente({ me, email }: any) {
   const lines = prods.filter((p) => cart[p.id] > 0).map((p) => ({ id: p.id, name: p.name, price: p.price, qty: cart[p.id] }));
   const subtotal = lines.reduce((a, l) => a + l.price * l.qty, 0);
   const total = subtotal + (lines.length ? fee : 0);
+
+  async function payOrder(orderId: string) {
+    const { data, error } = await sb.functions.invoke('wompi-create-payment', { body: { order_id: orderId } });
+    if (error || !data?.checkout_url) {
+      let msg = error?.message || 'Intenta de nuevo desde Pedidos.';
+      try { const j = await (error as any).context.json(); msg = j.error || msg; } catch {}
+      Alert.alert('No se pudo abrir el pago', msg);
+      return;
+    }
+    Linking.openURL(data.checkout_url);
+  }
   async function order() {
     if (!lines.length) return Alert.alert('Elige al menos un producto', 'Toca el + de un producto para agregarlo.');
     if (!addr.trim()) return Alert.alert('Falta tu dirección', 'Escribe la dirección de entrega.');
@@ -75,10 +87,10 @@ export function Cliente({ me, email }: any) {
     try {
       const c = await getPos();
       if (!c) { Alert.alert('No pude ubicarte', 'Activa el GPS, da permiso de ubicación a Cerquita y vuelve a intentar.'); return; }
-      const { error } = await sb.from('orders').insert({ store_id: store.id, customer_id: me.id, items: lines, total, address: addr.trim(), dest_lat: c.latitude, dest_lng: c.longitude });
+      const { data: nuevo, error } = await sb.from('orders').insert({ store_id: store.id, customer_id: me.id, items: lines, total, address: addr.trim(), dest_lat: c.latitude, dest_lng: c.longitude, payment_method: pay }).select('id').single();
       if (error) { say(error); return; }
-      Alert.alert('Pedido enviado', 'El comercio ya lo recibió.');
       setStore(null); setCart({}); setAddr(''); reload(); setTab('pedidos');
+      if (pay === 'electronic' && nuevo) payOrder(nuevo.id); else Alert.alert('Pedido enviado', 'El comercio ya lo recibió.');
     } catch (e) { say(e); } finally { setSending(false); }
   }
   async function sendReview() {
@@ -91,7 +103,7 @@ export function Cliente({ me, email }: any) {
   }
 
   const mine = orders.filter((o) => o.customer_id === me.id);
-  const activos = mine.filter((o) => o.status !== 'delivered').length;
+  const activos = mine.filter((o) => !['delivered', 'cancelled'].includes(o.status)).length;
   const lista = stores.filter((st) => (!cat || catOf(st).k === cat) && (!q.trim() || (st.name + ' ' + (st.address || '')).toLowerCase().includes(q.trim().toLowerCase())));
   const favList = stores.filter((st) => favs.includes(st.id));
   const card = (st: any) => (
@@ -108,7 +120,7 @@ export function Cliente({ me, email }: any) {
 
   let body: any;
   if (store) body = (
-    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <T onPress={() => setStore(null)} style={s.rowc}><Ico n="chevron-left" c={O} z={26} /><Text style={{ color: O, fontWeight: '700' }}>Volver</Text></T>
       <View style={[s.card, s.rowc, { marginTop: 8 }]}>
         <View style={[s.avatarS, { width: 56, height: 56, backgroundColor: catOf(store).c }]}><Ico n={catOf(store).i} c="#fff" z={30} /></View>
@@ -141,11 +153,17 @@ export function Cliente({ me, email }: any) {
         <View style={[s.row, { marginTop: 6 }]}><Text>Subtotal</Text><Text>{money(subtotal)}</Text></View>
         <View style={s.row}><Text>Domicilio</Text><Text>{money(lines.length ? fee : 0)}</Text></View>
         <View style={[s.row, { marginTop: 4 }]}><Text style={{ fontWeight: '900', color: N }}>Total a pagar</Text><Text style={{ fontWeight: '900', color: G, fontSize: 18 }}>{money(total)}</Text></View>
-        <View style={[s.rowc, { marginTop: 8 }]}><Ico n="cash" c={G} z={20} /><Text style={{ marginLeft: 6, fontWeight: '700' }}>Pago en efectivo al recibir</Text></View>
-        <Text style={{ color: '#888', fontSize: 11 }}>El pago electrónico estará disponible muy pronto.</Text>
       </View>
+      <Text style={[s.h, { marginTop: 4 }]}>Método de pago</Text>
+      <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+        <T onPress={() => setPay('cash')} style={[s.chip2, { paddingVertical: 12, paddingHorizontal: 16 }, pay === 'cash' && { backgroundColor: G, borderColor: G }]}>
+          <Text style={{ color: pay === 'cash' ? '#fff' : N, fontWeight: '800' }}>Efectivo</Text></T>
+        <T onPress={() => setPay('electronic')} style={[s.chip2, { paddingVertical: 12, paddingHorizontal: 16 }, pay === 'electronic' && { backgroundColor: G, borderColor: G }]}>
+          <Text style={{ color: pay === 'electronic' ? '#fff' : N, fontWeight: '800' }}>Pago electrónico</Text></T>
+      </View>
+      <Text style={{ color: '#666', fontSize: 12, marginBottom: 10 }}>{pay === 'electronic' ? 'Se abrirá la página segura de Wompi para pagar con tarjeta, PSE o Nequi.' : 'Pagas en efectivo al recibir tu pedido.'}</Text>
       <Inp placeholder="Tu dirección de entrega" value={addr} onChangeText={setAddr} />
-      <Btn t={sending ? 'Enviando…' : 'Hacer pedido'} on={sending ? () => {} : order} />
+      <Btn t={sending ? 'Enviando…' : pay === 'electronic' ? 'Hacer pedido y pagar' : 'Hacer pedido'} on={sending ? () => {} : order} />
     </ScrollView>
   );
   else if (tab === 'inicio') body = (
@@ -221,9 +239,11 @@ export function Cliente({ me, email }: any) {
           <View style={s.row}><Text style={s.b}>{o.stores?.name}</Text><Text style={{ color: G, fontWeight: '900' }}>{money(o.total)}</Text></View>
           <Text style={{ color: '#555' }}>{itemsTxt(o.items)}</Text>
           <Text style={{ color: '#888', fontSize: 11 }}>{shortId(o.id)} · {ago(o.created_at)}</Text>
-          <Text style={{ color: '#666', fontSize: 12 }}>Subtotal {money(o.subtotal ?? o.total)} + Domicilio {money(o.delivery_fee || 0)} · {o.payment_method === 'cash' ? 'Efectivo' : 'Electrónico'}</Text>
+          <Text style={{ color: '#666', fontSize: 12 }}>Subtotal {money(o.subtotal ?? o.total)} + Domicilio {money(o.delivery_fee || 0)} · {o.payment_method === 'cash' ? 'Efectivo' : 'Pago electrónico'}</Text>
           <Track st={o.status} />
-          {o.status !== 'delivered' && <OrderMap o={o} />}
+          {o.status === 'awaiting_payment' && <><Text style={{ color: '#E65100', fontWeight: '700', marginBottom: 4 }}>Esperando la confirmación de tu pago</Text><Btn t="Pagar ahora" on={() => payOrder(o.id)} /></>}
+          {o.status === 'cancelled' && <Text style={{ color: '#D32F2F', fontWeight: '700' }}>Pedido cancelado: el pago no fue aprobado.</Text>}
+          {!['delivered', 'cancelled', 'awaiting_payment'].includes(o.status) && <OrderMap o={o} />}
           {o.status === 'delivered' && !reviewed.includes(o.id) && <Btn t="Calificar mi pedido" on={() => { setRate(o); setRs(0); setRc(0); }} />}
           {o.status === 'delivered' && reviewed.includes(o.id) && <Text style={{ color: G, fontWeight: '700', marginTop: 4 }}>✓ Ya calificaste este pedido</Text>}
         </View>))}

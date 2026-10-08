@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity as T, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase as sb } from './src/supabase';
 import { s, G, N, O, TOP, say, Logo, Btn, Inp } from './src/ui';
 import { Cliente } from './src/Cliente';
@@ -39,6 +40,7 @@ function Root() {
   const [session, setSession] = useState<any>(null);
   const [me, setMe] = useState<any>(null);
   const [ready, setReady] = useState(false);
+  const ins = useSafeAreaInsets();
   useEffect(() => {
     sb.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
     const { data } = sb.auth.onAuthStateChange((_e, sess) => setSession(sess));
@@ -69,7 +71,7 @@ function Root() {
   );
   const View_ = me.role === 'cliente' ? Cliente : me.role === 'comercio' ? Comercio : me.role === 'admin' ? Admin : Repartidor;
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: TOP }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: Math.max(TOP, ins.top), paddingBottom: ins.bottom }}>
       <StatusBar style="dark" />
       <View_ me={me} email={session.user.email} />
     </SafeAreaView>
@@ -91,4 +93,4 @@ class ErrorBoundary extends React.Component<any, { err: any }> {
   }
 }
 
-export default function App() { return <ErrorBoundary><Root /></ErrorBoundary>; }
+export default function App() { return <SafeAreaProvider><ErrorBoundary><Root /></ErrorBoundary></SafeAreaProvider>; }

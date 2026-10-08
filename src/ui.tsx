@@ -8,8 +8,8 @@ import { supabase as sb } from './supabase';
 export const G = '#1DB954', N = '#0B2A3D', O = '#F26B21', B = '#1E6BFF', TEAL = '#0B3D3A';
 export const TOP = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0;
 export const DEF = { latitude: 6.3373, longitude: -75.5579, latitudeDelta: 0.08, longitudeDelta: 0.08 };
-export const LBL: any = { pending: 'Pendiente', preparing: 'En preparación', ready: 'Listo para recoger', on_way: 'En camino', delivered: 'Entregado' };
-export const CHIP: any = { pending: ['#FFF3E0', '#E65100'], preparing: ['#FFF3E0', '#E65100'], ready: ['#E3F6EA', '#1B8A47'], on_way: ['#E3EEFF', '#1E6BFF'], delivered: ['#EDEDED', '#555555'] };
+export const LBL: any = { awaiting_payment: 'Esperando pago', cancelled: 'Cancelado', pending: 'Pendiente', preparing: 'En preparación', ready: 'Listo para recoger', on_way: 'En camino', delivered: 'Entregado' };
+export const CHIP: any = { awaiting_payment: ['#FFF3E0', '#E65100'], cancelled: ['#FDE2E2', '#D32F2F'], pending: ['#FFF3E0', '#E65100'], preparing: ['#FFF3E0', '#E65100'], ready: ['#E3F6EA', '#1B8A47'], on_way: ['#E3EEFF', '#1E6BFF'], delivered: ['#EDEDED', '#555555'] };
 export const CATS: any[] = [
   { k: 'restaurantes', t: 'Restaurantes', i: 'silverware-fork-knife', c: '#F26B21' },
   { k: 'supermercados', t: 'Supermercados', i: 'cart', c: '#1DB954' },
@@ -24,7 +24,7 @@ export const CT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: '
 export const MT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'productos', t: 'Productos', i: 'storefront-outline' }, { k: 'stats', t: 'Estadísticas', i: 'chart-bar' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 export const RT = [{ k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'mapa', t: 'Mapa', i: 'map-outline' }, { k: 'ganancias', t: 'Ganancias', i: 'cash' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 
-export const AT = [{ k: 'resumen', t: 'Resumen', i: 'view-dashboard-outline' }, { k: 'liquidar', t: 'Liquidar', i: 'cash-multiple' }, { k: 'liquidaciones', t: 'Liquidaciones', i: 'file-document-outline' }, { k: 'auditoria', t: 'Auditoría', i: 'shield-check-outline' }, { k: 'ajustes', t: 'Ajustes', i: 'cog-outline' }];
+export const AT = [{ k: 'resumen', t: 'Resumen', i: 'view-dashboard-outline' }, { k: 'liquidar', t: 'Liquidar', i: 'cash-multiple' }, { k: 'liquidaciones', t: 'Historial', i: 'file-document-outline' }, { k: 'auditoria', t: 'Auditoría', i: 'shield-check-outline' }, { k: 'ajustes', t: 'Ajustes', i: 'cog-outline' }];
 export const money = (n: number) => '$' + Number(n).toLocaleString('es-CO');
 export const say = (e: any) => Alert.alert('Ups', String(e?.message || e));
 export const shortId = (id: string) => '#' + id.slice(0, 4).toUpperCase();

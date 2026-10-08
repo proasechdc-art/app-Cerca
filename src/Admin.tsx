@@ -3,6 +3,13 @@ import { View, Text, ScrollView, Alert } from 'react-native';
 import { supabase as sb } from './supabase';
 import { s, G, N, O, AT, money, say, ago, Btn, Btn2, Inp, Stat, Logo, TabBar } from './ui';
 
+const AUD: any = {
+  payment_created: 'Pago creado', payment_approved: 'Pago aprobado (Wompi)', payment_declined: 'Pago rechazado', payment_failed: 'Pago fallido',
+  payment_cancelled: 'Pago anulado', payment_amount_mismatch: 'El monto no coincide', payment_event_after_approved: 'Aviso posterior a un pago aprobado',
+  order_delivered_ledger: 'Pedido entregado: dinero registrado', settlement_created: 'Liquidación creada', settlement_approved: 'Liquidación aprobada',
+  payout_paid: 'Pago al beneficiario confirmado', settlement_closed: 'Liquidación cerrada', settlement_cancelled: 'Liquidación cancelada',
+  settings_changed: 'Tarifas cambiadas', admin_role_assigned: 'Rol de administrador asignado',
+};
 export function Admin({ me, email }: any) {
   const [tab, setTab] = useState('resumen');
   const [sum, setSum] = useState<any>(null);
@@ -86,7 +93,7 @@ export function Admin({ me, email }: any) {
       <Text style={s.h}>Auditoría</Text>
       {logs.map((l) => (
         <View key={l.id} style={s.card}>
-          <View style={s.row}><Text style={s.b}>{l.action}</Text><Text style={{ color: '#888', fontSize: 11 }}>{ago(l.at)}</Text></View>
+          <View style={s.row}><Text style={s.b}>{AUD[l.action] || l.action}</Text><Text style={{ color: '#888', fontSize: 11 }}>{ago(l.at)}</Text></View>
           <Text style={{ color: '#666', fontSize: 12 }}>{JSON.stringify(l.detail || {}).slice(0, 160)}</Text>
         </View>))}
       {!logs.length && <Text>Sin registros todavía.</Text>}
