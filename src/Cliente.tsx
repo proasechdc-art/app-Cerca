@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity as T, ScrollView, Alert, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { supabase as sb } from './supabase';
-import { s, G, N, O, CATS, CT, catOf, money, say, ago, shortId, itemsTxt, info, getPos, useOrders, Ico, Btn, Btn2, Inp, Vacio, Logo, Bell, TabBar, Perfil, OrderMap, Stars, Track } from './ui';
+import { s, G, N, O, CATS, MAS, CT, catOf, money, say, ago, shortId, itemsTxt, info, getPos, useOrders, Ico, Btn, Btn2, Inp, Vacio, Logo, Bell, TabBar, Perfil, OrderMap, Stars, Track } from './ui';
 
 export function Cliente({ me, email }: any) {
   const [orders, reload] = useOrders();
@@ -24,6 +24,7 @@ export function Cliente({ me, email }: any) {
   const [rc, setRc] = useState(0);
   const [fee, setFee] = useState(0);
   const [pay, setPay] = useState('cash');
+  const [masOpen, setMasOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     const [a, b, c, d] = await Promise.all([
@@ -184,11 +185,21 @@ export function Cliente({ me, email }: any) {
       </View>
       <View style={s.grid}>
         {CATS.map((c) => (
-          <T key={c.k} style={s.cat} onPress={() => c.soon ? Alert.alert('Próximamente', `${c.t} llegará pronto a Cerquita.`) : setCat(cat === c.k ? '' : c.k)}>
+          <T key={c.k} style={s.cat} onPress={() => c.k === 'mas' ? setMasOpen(!masOpen) : c.soon ? Alert.alert('Próximamente', `${c.t} llegará pronto a Cerquita.`) : setCat(cat === c.k ? '' : c.k)}>
             <View style={[s.catI, { backgroundColor: c.c }, cat === c.k && { borderWidth: 3, borderColor: N }]}><Ico n={c.i} c="#fff" z={28} /></View>
             <Text style={s.catT}>{c.t}</Text>
           </T>))}
       </View>
+      {masOpen && (
+        <View style={{ backgroundColor: '#F7F9FA', borderRadius: 16, padding: 12, marginBottom: 12 }}>
+          <Text style={[s.b, { marginBottom: 8 }]}>Más categorías</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {MAS.map((m) => (
+              <T key={m.k} onPress={() => m.soon ? Alert.alert('Próximamente', `${m.t} llegará pronto a Cerquita.`) : (setCat(m.k), setMasOpen(false))} style={[s.chip2, { flexDirection: 'row', alignItems: 'center' }, cat === m.k && { backgroundColor: G, borderColor: G }]}>
+                <Ico n={m.i} c={cat === m.k ? '#fff' : m.c} z={18} /><Text style={{ marginLeft: 6, color: cat === m.k ? '#fff' : N, fontWeight: '700', fontSize: 12 }}>{m.t}</Text>
+              </T>))}
+          </View>
+        </View>)}
       <View style={{ backgroundColor: N, borderRadius: 18, padding: 18, flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
         <View style={{ flex: 1 }}>
           <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>Todo lo que necesitas</Text>
@@ -215,6 +226,7 @@ export function Cliente({ me, email }: any) {
         </ScrollView>
       </>}
       <Text style={s.h}>{cat ? catOf({ category: cat }).t : 'Comercios cerca de ti'}</Text>
+      {!!cat && <T onPress={() => setCat('')}><Text style={{ color: O, fontWeight: '700', marginBottom: 8 }}>Quitar filtro ✕</Text></T>}
       {lista.map(card)}
       {!lista.length && <Text>No encontramos comercios con esa búsqueda.</Text>}
     </ScrollView>

@@ -20,6 +20,31 @@ export const CATS: any[] = [
   { k: 'mascotas', t: 'Mascotas', i: 'paw', c: '#E8467C' },
   { k: 'mas', t: 'Más', i: 'view-grid', c: '#6C4BD6', soon: true },
 ];
+export const MAS: any[] = [
+  { k: 'ropa', t: 'Ropa y moda', i: 'tshirt-crew', c: '#8E44AD' },
+  { k: 'calzado', t: 'Calzado', i: 'shoe-sneaker', c: '#2D7FF9' },
+  { k: 'belleza', t: 'Belleza y cosméticos', i: 'lipstick', c: '#E8467C' },
+  { k: 'peluquerias', t: 'Peluquerías y barberías', i: 'content-cut', c: '#6C4BD6', soon: true },
+  { k: 'florerias', t: 'Florerías', i: 'flower', c: '#E8467C' },
+  { k: 'regalos', t: 'Regalos y detalles', i: 'gift', c: '#F26B21' },
+  { k: 'tecnologia', t: 'Tecnología y celulares', i: 'cellphone', c: '#1E6BFF' },
+  { k: 'ferreterias', t: 'Ferreterías', i: 'hammer-wrench', c: '#7A8A94' },
+  { k: 'hogar', t: 'Hogar y decoración', i: 'sofa', c: '#B07D3A' },
+  { k: 'jugueterias', t: 'Jugueterías', i: 'teddy-bear', c: '#F28C28' },
+  { k: 'papelerias', t: 'Papelerías y librerías', i: 'book-open-variant', c: '#2D7FF9' },
+  { k: 'panaderias', t: 'Panaderías y reposterías', i: 'bread-slice', c: '#C98A3B' },
+  { k: 'heladerias', t: 'Heladerías', i: 'ice-cream', c: '#E8467C' },
+  { k: 'cafeterias', t: 'Cafeterías', i: 'coffee', c: '#6D4C41' },
+  { k: 'carnicerias', t: 'Carnicerías', i: 'food-steak', c: '#D32F2F' },
+  { k: 'pescaderias', t: 'Pescaderías', i: 'fish', c: '#1E88E5' },
+  { k: 'viveros', t: 'Viveros y plantas', i: 'sprout', c: '#1DB954' },
+  { k: 'limpieza', t: 'Productos de limpieza', i: 'spray-bottle', c: '#26A69A' },
+  { k: 'bebes', t: 'Productos para bebés', i: 'baby-bottle-outline', c: '#F48FB1' },
+  { k: 'vehiculos', t: 'Accesorios para vehículos', i: 'car-wrench', c: '#455A64' },
+  { k: 'deportes', t: 'Deportes y ejercicio', i: 'dumbbell', c: '#E53935' },
+  { k: 'videojuegos', t: 'Videojuegos', i: 'controller-classic', c: '#6C4BD6' },
+  { k: 'servicios_hogar', t: 'Servicios para el hogar', i: 'tools', c: '#7A8A94', soon: true },
+];
 export const CT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'favoritos', t: 'Favoritos', i: 'heart-outline' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 export const MT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'productos', t: 'Productos', i: 'storefront-outline' }, { k: 'stats', t: 'Estadísticas', i: 'chart-bar' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 export const RT = [{ k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'mapa', t: 'Mapa', i: 'map-outline' }, { k: 'ganancias', t: 'Ganancias', i: 'cash' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
@@ -30,7 +55,7 @@ export const say = (e: any) => Alert.alert('Ups', String(e?.message || e));
 export const shortId = (id: string) => '#' + id.slice(0, 4).toUpperCase();
 export const isToday = (d: string) => new Date(d).toDateString() === new Date().toDateString();
 export const ago = (d: string) => { const m = Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 60000)); return m < 60 ? `Hace ${m} min` : m < 1440 ? `Hace ${Math.round(m / 60)} h` : `Hace ${Math.round(m / 1440)} d`; };
-export const catOf = (st: any) => CATS.find((c) => c.k === (st?.category || 'restaurantes')) || CATS[0];
+export const catOf = (st: any) => [...CATS, ...MAS].find((c) => c.k === (st?.category || 'restaurantes')) || CATS[0];
 export const itemsTxt = (items: any[]) => { const m: any = {}; (items || []).forEach((i: any) => { m[i.name] = (m[i.name] || 0) + (i.qty || 1); }); return Object.entries(m).map(([k, v]) => `${v}x ${k}`).join(', '); };
 export const info = (x: any) => { const p: string[] = []; if (x?.rating) p.push(`★ ${x.rating}`); if (x?.avg_minutes) p.push(`~${x.avg_minutes} min`); return p.length ? p.join(' · ') : 'Nuevo'; };
 export const km = (a: any, b: any) => {

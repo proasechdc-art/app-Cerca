@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity as T, ScrollView, Alert } from 'react-native';
 import { supabase as sb } from './supabase';
-import { s, G, O, B, TEAL, CATS, MT, money, say, shortId, isToday, ago, catOf, itemsTxt, getPos, useOrders, Ico, Chip, Btn, Inp, Vacio, Stat, Logo, Bell, TabBar, Perfil } from './ui';
+import { s, G, O, B, TEAL, CATS, MAS, MT, money, say, shortId, isToday, ago, catOf, itemsTxt, getPos, useOrders, Ico, Chip, Btn, Inp, Vacio, Stat, Logo, Bell, TabBar, Perfil } from './ui';
 
 export function Comercio({ me, email }: any) {
   const [orders, reload] = useOrders();
@@ -65,7 +65,7 @@ export function Comercio({ me, email }: any) {
       <Inp placeholder="Dirección" value={a} onChangeText={setA} />
       <Text style={s.b}>Categoría</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10 }}>
-        {CATS.filter((c) => !c.soon).map((c) => (
+        {[...CATS.filter((c) => !c.soon), ...MAS.filter((c) => !c.soon)].map((c) => (
           <T key={c.k} onPress={() => setCat(c.k)} style={[s.chip2, cat === c.k && { backgroundColor: G, borderColor: G }]}><Text style={{ color: cat === c.k ? '#fff' : '#0B2A3D', fontWeight: '700' }}>{c.t}</Text></T>))}
       </View>
       <Btn t="Crear comercio" on={createStore} />
