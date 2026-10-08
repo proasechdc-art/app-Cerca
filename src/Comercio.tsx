@@ -45,6 +45,11 @@ export function Comercio({ me, email }: any) {
     const { data, error } = await sb.from('stores').update({ is_open: !store.is_open }).eq('id', store.id).select().single();
     error ? say(error) : setStore(data);
   }
+  const cancelarMotivo = (o: any, motivo: string) => sb.rpc('cancel_order', { p_order: o.id, p_reason: motivo }).then(({ error }) => { if (error) say(error); reload(); });
+  const cancelar = (o: any) => Alert.alert('¿Por qué cancelas este pedido?', 'El cliente recibirá su dinero de vuelta.', [
+    { text: 'Volver' },
+    { text: 'Otro motivo', onPress: () => cancelarMotivo(o, 'El comercio canceló el pedido') },
+    { text: 'Sin productos', onPress: () => cancelarMotivo(o, 'El comercio no tiene los productos') }]);
   const setSt = (id: string, status: string) => sb.from('orders').update({ status }).eq('id', id).then(({ error }) => { if (error) say(error); reload(); });
   if (store === undefined) return <Vacio i="clock-outline" t="Cargando…" d="" />;
   const mine = store ? orders.filter((o) => o.store_id === store.id) : [];
@@ -54,6 +59,7 @@ export function Comercio({ me, email }: any) {
   const Acciones = ({ o }: any) => (<>
     {o.status === 'pending' && <Btn t="Aceptar pedido y empezar a preparar" on={() => setSt(o.id, 'preparing')} />}
     {o.status === 'preparing' && <Btn t="Marcar como listo para recoger" on={() => setSt(o.id, 'ready')} />}
+    {['pending', 'preparing', 'ready'].includes(o.status) && <Btn t={o.status === 'pending' ? 'Rechazar pedido' : 'Cancelar pedido'} c="#D32F2F" on={() => cancelar(o)} />}
   </>);
   let body: any;
   if (!store) body = tab === 'perfil' ? <Perfil me={me} email={email} /> : (

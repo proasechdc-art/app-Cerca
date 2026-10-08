@@ -94,6 +94,13 @@ export function Cliente({ me, email }: any) {
       if (pay === 'electronic' && nuevo) payOrder(nuevo.id); else Alert.alert('Pedido enviado', 'El comercio ya lo recibió.');
     } catch (e) { say(e); } finally { setSending(false); }
   }
+  function cancelOrder(o: any) {
+    Alert.alert('Cancelar pedido', '¿Seguro que quieres cancelarlo?', [{ text: 'No' }, { text: 'Sí, cancelar', style: 'destructive', onPress: async () => {
+      const { error } = await sb.rpc('cancel_order', { p_order: o.id, p_reason: 'Cancelado por el cliente' });
+      if (error) say(error); else Alert.alert('Pedido cancelado', o.payment_method === 'electronic' && o.status === 'pending' ? 'Tu pago será reembolsado.' : 'Listo.');
+      reload();
+    } }]);
+  }
   async function sendReview() {
     if (!rs) return Alert.alert('Elige las estrellas', 'Califica el comercio de 1 a 5 estrellas.');
     const { error } = await sb.from('reviews').insert({ order_id: rate.id, customer_id: me.id, store_id: rate.store_id, courier_id: rate.courier_id, store_rating: rs, courier_rating: rc || null });
@@ -254,7 +261,10 @@ export function Cliente({ me, email }: any) {
           <Text style={{ color: '#666', fontSize: 12 }}>Subtotal {money(o.subtotal ?? o.total)} + Domicilio {money(o.delivery_fee || 0)} · {o.payment_method === 'cash' ? 'Efectivo' : 'Pago electrónico'}</Text>
           <Track st={o.status} />
           {o.status === 'awaiting_payment' && <><Text style={{ color: '#E65100', fontWeight: '700', marginBottom: 4 }}>Esperando la confirmación de tu pago</Text><Btn t="Pagar ahora" on={() => payOrder(o.id)} /></>}
-          {o.status === 'cancelled' && <Text style={{ color: '#D32F2F', fontWeight: '700' }}>Pedido cancelado: el pago no fue aprobado.</Text>}
+          {o.status === 'cancelled' && <Text style={{ color: '#D32F2F', fontWeight: '700' }}>Pedido cancelado{o.cancel_reason ? `: ${o.cancel_reason}` : ''}</Text>}
+          {o.status === 'cancelled' && o.payment_method === 'electronic' && <Text style={{ color: '#666', fontSize: 12 }}>Si ya habías pagado, tu dinero se reembolsa. Cerquita procesa el reembolso.</Text>}
+          {['awaiting_payment', 'pending'].includes(o.status) && <T onPress={() => cancelOrder(o)}><Text style={{ color: '#D32F2F', fontWeight: '700', marginTop: 6 }}>Cancelar pedido</Text></T>}
+          {['preparing', 'ready', 'on_way'].includes(o.status) && <Text style={{ color: '#888', fontSize: 11, marginTop: 4 }}>Ya no se puede cancelar desde la app porque el comercio ya aceptó tu pedido.</Text>}
           {!['delivered', 'cancelled', 'awaiting_payment'].includes(o.status) && <OrderMap o={o} />}
           {o.status === 'delivered' && !reviewed.includes(o.id) && <Btn t="Calificar mi pedido" on={() => { setRate(o); setRs(0); setRc(0); }} />}
           {o.status === 'delivered' && reviewed.includes(o.id) && <Text style={{ color: G, fontWeight: '700', marginTop: 4 }}>✓ Ya calificaste este pedido</Text>}

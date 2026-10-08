@@ -8,7 +8,7 @@ const AUD: any = {
   payment_cancelled: 'Pago anulado', payment_amount_mismatch: 'El monto no coincide', payment_event_after_approved: 'Aviso posterior a un pago aprobado',
   order_delivered_ledger: 'Pedido entregado: dinero registrado', settlement_created: 'Liquidación creada', settlement_approved: 'Liquidación aprobada',
   payout_paid: 'Pago al beneficiario confirmado', settlement_closed: 'Liquidación cerrada', settlement_cancelled: 'Liquidación cancelada',
-  settings_changed: 'Tarifas cambiadas', admin_role_assigned: 'Rol de administrador asignado',
+  settings_changed: 'Tarifas cambiadas', order_cancelled: 'Pedido cancelado', refund_confirmed: 'Reembolso confirmado', payment_approved_after_cancel: 'Pago recibido de un pedido cancelado', admin_role_assigned: 'Rol de administrador asignado',
 };
 export function Admin({ me, email }: any) {
   const [tab, setTab] = useState('resumen');
@@ -19,6 +19,7 @@ export function Admin({ me, email }: any) {
   const [com, setCom] = useState('');
   const [fee, setFee] = useState('');
   const [ref, setRef] = useState('');
+  const [refs, setRefs] = useState<any[]>([]);
   const load = useCallback(async () => {
     const [a, b, c, d, e] = await Promise.all([
       sb.rpc('admin_summary'), sb.rpc('admin_pending'), sb.rpc('admin_settlements'),
@@ -26,6 +27,7 @@ export function Admin({ me, email }: any) {
       sb.from('finance_settings').select('*').eq('id', 1).maybeSingle(),
     ]);
     setSum(a.data); setPend(b.data || []); setSetts(c.data || []); setLogs(d.data || []);
+    sb.rpc('admin_refunds').then(({ data }) => setRefs(data || []));
     if (e.data) { setCom(String(e.data.commission_pct)); setFee(String(e.data.courier_fee)); }
   }, []);
   useEffect(() => { load(); }, [tab]);
@@ -72,6 +74,14 @@ export function Admin({ me, email }: any) {
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
       <Text style={s.h}>Liquidaciones</Text>
       <Inp placeholder="Referencia del pago (comprobante, opcional)" value={ref} onChangeText={setRef} />
+      {!!refs.filter((r) => r.status === 'PENDING').length && <Text style={[s.h, { marginTop: 4 }]}>Reembolsos pendientes</Text>}
+      {refs.filter((r) => r.status === 'PENDING').map((r) => (
+        <View key={r.id} style={[s.card, { backgroundColor: '#FFF8F1' }]}>
+          <Text style={s.b}>{money(r.amount)} · {r.email}</Text>
+          <Text style={{ color: '#666', fontSize: 12 }}>{r.reason} · {ago(r.created_at)}</Text>
+          <Text style={{ color: '#666', fontSize: 11 }}>Referencia Wompi: {r.reference}</Text>
+          <Btn t="Ya reembolsé: confirmar" on={() => sure('Confirmar que el dinero ya se devolvió', () => run(sb.rpc('confirm_refund', { p_refund: r.id, p_ref: ref.trim() || 'manual' }), 'Reembolso registrado'))} />
+        </View>))}
       {!setts.length && <Text>Aún no hay liquidaciones.</Text>}
       {setts.map((x) => (
         <View key={x.id} style={s.card}>
