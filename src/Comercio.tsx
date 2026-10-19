@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity as T, ScrollView, Alert } from 'react-native';
 import { supabase as sb } from './supabase';
-import { s, G, O, B, TEAL, CATS, MAS, MT, money, say, shortId, isToday, ago, catOf, itemsTxt, getPos, useOrders, Ico, Chip, Btn, Inp, Vacio, Stat, Logo, Bell, TabBar, Perfil } from './ui';
+import { s, G, O, B, TEAL, CATS, MAS, MT, money, say, shortId, isToday, ago, catOf, itemsTxt, Foto, subirFoto, getPos, useOrders, Ico, Chip, Btn, Inp, Vacio, Stat, Logo, Bell, TabBar, Perfil } from './ui';
 
 export function Comercio({ me, email }: any) {
   const [orders, reload] = useOrders();
@@ -13,6 +13,7 @@ export function Comercio({ me, email }: any) {
   const [liqs, setLiqs] = useState<any[]>([]);
   const [n, setN] = useState(''); const [a, setA] = useState(''); const [cat, setCat] = useState('restaurantes');
   const [pn, setPn] = useState(''); const [pp, setPp] = useState('');
+  const [pimg, setPimg] = useState<string | null>(null);
   useEffect(() => { sb.from('stores').select('*').eq('owner_id', me.id).maybeSingle().then(({ data }) => setStore(data || null)); }, []);
   const loadProds = useCallback(async () => {
     if (!store) return;
@@ -34,12 +35,23 @@ export function Comercio({ me, email }: any) {
   }
   async function addProd() {
     if (!pn.trim() || !parseInt(pp)) return Alert.alert('Faltan datos', 'Escribe el nombre y el precio del producto.');
-    const { error } = await sb.from('products').insert({ store_id: store.id, name: pn.trim(), price: parseInt(pp) });
+    const { error } = await sb.from('products').insert({ store_id: store.id, name: pn.trim(), price: parseInt(pp), image_url: pimg });
     if (error) return say(error);
-    setPn(''); setPp(''); loadProds();
+    setPn(''); setPp(''); setPimg(null); loadProds();
   }
   function delProd(p: any) {
     Alert.alert('Borrar producto', `¿Borrar "${p.name}"?`, [{ text: 'Cancelar' }, { text: 'Borrar', style: 'destructive', onPress: async () => { await sb.from('products').delete().eq('id', p.id); loadProds(); } }]);
+  }
+  async function cambiarFotoTienda() {
+    const u = await subirFoto(me.id, [1, 1]); if (!u) return;
+    const { data, error } = await sb.from('stores').update({ image_url: u }).eq('id', store.id).select().single();
+    error ? say(error) : setStore(data);
+  }
+  async function cambiarFotoProducto(p: any) {
+    const u = await subirFoto(me.id, [1, 1]); if (!u) return;
+    const { error } = await sb.from('products').update({ image_url: u }).eq('id', p.id);
+    if (error) say(error);
+    loadProds();
   }
   async function toggleOpen() {
     const { data, error } = await sb.from('stores').update({ is_open: !store.is_open }).eq('id', store.id).select().single();
@@ -68,7 +80,8 @@ export function Comercio({ me, email }: any) {
       <Text style={s.h}>Crea tu comercio</Text>
       <Text style={{ marginBottom: 10 }}>Esta cuenta aún no tiene comercio. Si ya creaste uno, entra con la cuenta que lo creó.</Text>
       <Inp placeholder="Nombre del comercio" value={n} onChangeText={setN} />
-      <Inp placeholder="Dirección" value={a} onChangeText={setA} />
+      <Inp placeholder="Dirección (o referencia si no tiene)" value={a} onChangeText={setA} />
+      <Text style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>Crea el comercio estando en tu negocio: así su ubicación queda guardada en el mapa aunque no tenga dirección.</Text>
       <Text style={s.b}>Categoría</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10 }}>
         {[...CATS.filter((c) => !c.soon), ...MAS.filter((c) => !c.soon)].map((c) => (
@@ -82,7 +95,7 @@ export function Comercio({ me, email }: any) {
       <View style={{ backgroundColor: TEAL, padding: 16, paddingBottom: 22 }}>
         <View style={s.row}><Logo light k={0.85} /><Bell dark n={pendientes} on={() => setTab('pedidos')} /></View>
         <View style={[s.rowc, { marginTop: 14 }]}>
-          <View style={[s.avatar, { width: 60, height: 60, borderRadius: 14, backgroundColor: catOf(store).c }]}><Ico n={catOf(store).i} c="#fff" z={32} /></View>
+          <T onPress={cambiarFotoTienda}><Foto uri={store.image_url} w={60} r={14} bg={catOf(store).c} icon={catOf(store).i} /></T>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={s.rowc}>
               <Text numberOfLines={1} style={{ color: '#fff', fontSize: 20, fontWeight: '900', flexShrink: 1 }}>{store.name}</Text>
@@ -134,11 +147,18 @@ export function Comercio({ me, email }: any) {
       <Text style={s.h}>Productos</Text>
       <Inp placeholder="Nombre del producto" value={pn} onChangeText={setPn} />
       <Inp placeholder="Precio (ej. 12000)" keyboardType="number-pad" value={pp} onChangeText={setPp} />
+      <View style={[s.rowc, { marginBottom: 8 }]}>
+        <T onPress={async () => { const u = await subirFoto(me.id, [1, 1]); if (u) setPimg(u); }} style={[s.chip2, { flexDirection: 'row', alignItems: 'center' }]}>
+          <Ico n="camera-outline" c="#0B2A3D" z={18} /><Text style={{ marginLeft: 6, fontWeight: '700', color: '#0B2A3D' }}>{pimg ? 'Cambiar foto' : 'Agregar foto'}</Text>
+        </T>
+        {!!pimg && <Foto uri={pimg} w={44} r={8} />}
+      </View>
       <Btn t="+  Guardar producto" on={addProd} />
       <Text style={[s.h, { marginTop: 18 }]}>Mis productos ({prods.length})</Text>
       {prods.map((p) => (
         <View key={p.id} style={[s.card, s.row]}>
-          <View style={{ flex: 1 }}><Text style={s.b}>{p.name}</Text><Text style={{ color: G, fontWeight: '800' }}>{money(p.price)}</Text></View>
+          <T onPress={() => cambiarFotoProducto(p)}><Foto uri={p.image_url} w={52} r={10} bg="#CBD5DA" icon="camera-outline" /></T>
+          <View style={{ flex: 1, marginLeft: 10 }}><Text style={s.b}>{p.name}</Text><Text style={{ color: G, fontWeight: '800' }}>{money(p.price)}</Text></View>
           <T onPress={() => delProd(p)}><Ico n="trash-can-outline" c="#D32F2F" z={24} /></T>
         </View>))}
       {!prods.length && <Text>Aún no tienes productos.</Text>}

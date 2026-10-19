@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity as T, ScrollView, Alert, Linking } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity as T, ScrollView, Alert, Linking, Image } from 'react-native';
 import * as Location from 'expo-location';
+import MapView, { Marker } from 'react-native-maps';
 import { supabase as sb } from './supabase';
-import { s, G, N, O, CATS, MAS, CT, catOf, money, say, ago, shortId, itemsTxt, info, getPos, useOrders, Ico, Btn, Btn2, Inp, Vacio, Logo, Bell, TabBar, Perfil, OrderMap, Stars, Track } from './ui';
+import { s, G, N, O, CATS, MAS, CT, catOf, Foto, tomarFotoLugar, money, say, ago, shortId, itemsTxt, info, getPos, useOrders, Ico, Btn, Btn2, Inp, Vacio, Logo, Bell, TabBar, Perfil, OrderMap, Stars, Track } from './ui';
 
 export function Cliente({ me, email }: any) {
   const [orders, reload] = useOrders();
@@ -22,8 +23,15 @@ export function Cliente({ me, email }: any) {
   const [rate, setRate] = useState<any>(null);
   const [rs, setRs] = useState(0);
   const [rc, setRc] = useState(0);
+  const [claimFor, setClaimFor] = useState<any>(null);
+  const [cReason, setCReason] = useState('');
+  const [cDesc, setCDesc] = useState('');
+  const [claims, setClaims] = useState<any[]>([]);
   const [fee, setFee] = useState(0);
   const [pay, setPay] = useState('cash');
+  const [noAddr, setNoAddr] = useState(false);
+  const [pin, setPin] = useState<any>(null);
+  const [lugarFoto, setLugarFoto] = useState<any>(null);
   const [masOpen, setMasOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
@@ -38,6 +46,7 @@ export function Cliente({ me, email }: any) {
     const m: any = {}; (b.data || []).forEach((x: any) => { m[x.store_id] = x; }); setStats(m);
     setFavs((c.data || []).map((x: any) => x.store_id));
     setReviewed((d.data || []).map((x: any) => x.order_id));
+    sb.from('claims').select('order_id, status, refund_amount').then(({ data }) => setClaims(data || []));
   }, []);
   useEffect(() => { loadAll(); }, [tab]);
   useEffect(() => {
@@ -62,7 +71,7 @@ export function Cliente({ me, email }: any) {
   }
   async function open(st: any) {
     if (st.is_open === false) return Alert.alert('Comercio cerrado', 'Este comercio no recibe pedidos por ahora.');
-    setStore(st); setCart({}); setPay('cash');
+    setStore(st); setCart({}); setPay('cash'); setNoAddr(false); setPin(null); setLugarFoto(null);
     const { data } = await sb.from('products').select('*').eq('store_id', st.id);
     setProds(data || []);
   }
@@ -83,14 +92,15 @@ export function Cliente({ me, email }: any) {
   }
   async function order() {
     if (!lines.length) return Alert.alert('Elige al menos un producto', 'Toca el + de un producto para agregarlo.');
-    if (!addr.trim()) return Alert.alert('Falta tu dirección', 'Escribe la dirección de entrega.');
+    if (!addr.trim()) return Alert.alert(noAddr ? 'Falta la referencia' : 'Falta tu dirección', noAddr ? 'Describe cómo llegar a tu ubicación (por ejemplo: casa azul, frente a la cancha).' : 'Escribe la dirección de entrega, o marca que tu lugar no tiene dirección.');
     setSending(true);
     try {
       const c = await getPos();
       if (!c) { Alert.alert('No pude ubicarte', 'Activa el GPS, da permiso de ubicación a Cerquita y vuelve a intentar.'); return; }
-      const { data: nuevo, error } = await sb.from('orders').insert({ store_id: store.id, customer_id: me.id, items: lines, total, address: addr.trim(), dest_lat: c.latitude, dest_lng: c.longitude, payment_method: pay }).select('id').single();
+      const dest = (noAddr && pin) ? pin : c;
+      const { data: nuevo, error } = await sb.from('orders').insert({ store_id: store.id, customer_id: me.id, items: lines, total, address: (noAddr ? 'Sin dirección: ' : '') + addr.trim(), dest_lat: dest.latitude, dest_lng: dest.longitude, payment_method: pay, dest_photo_path: lugarFoto?.path || null }).select('id').single();
       if (error) { say(error); return; }
-      setStore(null); setCart({}); setAddr(''); reload(); setTab('pedidos');
+      setStore(null); setCart({}); setAddr(''); setNoAddr(false); setPin(null); setLugarFoto(null); reload(); setTab('pedidos');
       if (pay === 'electronic' && nuevo) payOrder(nuevo.id); else Alert.alert('Pedido enviado', 'El comercio ya lo recibió.');
     } catch (e) { say(e); } finally { setSending(false); }
   }
@@ -100,6 +110,14 @@ export function Cliente({ me, email }: any) {
       if (error) say(error); else Alert.alert('Pedido cancelado', o.payment_method === 'electronic' && o.status === 'pending' ? 'Tu pago será reembolsado.' : 'Listo.');
       reload();
     } }]);
+  }
+  async function sendClaim() {
+    if (!cReason) return Alert.alert('Elige el problema', 'Selecciona qué pasó con tu pedido.');
+    const { error } = await sb.rpc('create_claim', { p_order: claimFor.id, p_reason: cReason, p_description: cDesc.trim() || null });
+    if (error) return say(error);
+    setClaimFor(null); setCReason(''); setCDesc('');
+    Alert.alert('Reclamo enviado', 'Lo revisaremos y verás aquí la respuesta.');
+    loadAll();
   }
   async function sendReview() {
     if (!rs) return Alert.alert('Elige las estrellas', 'Califica el comercio de 1 a 5 estrellas.');
@@ -116,7 +134,7 @@ export function Cliente({ me, email }: any) {
   const favList = stores.filter((st) => favs.includes(st.id));
   const card = (st: any) => (
     <T key={st.id} style={[s.card, s.rowc]} onPress={() => open(st)}>
-      <View style={[s.avatarS, { backgroundColor: catOf(st).c }]}><Ico n={catOf(st).i} c="#fff" z={24} /></View>
+      <Foto uri={st.image_url} w={44} r={12} bg={catOf(st).c} icon={catOf(st).i} />
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={s.b}>{st.name}</Text>
         <Text numberOfLines={1} style={{ color: '#666' }}>{st.address}</Text>
@@ -131,7 +149,7 @@ export function Cliente({ me, email }: any) {
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       <T onPress={() => setStore(null)} style={s.rowc}><Ico n="chevron-left" c={O} z={26} /><Text style={{ color: O, fontWeight: '700' }}>Volver</Text></T>
       <View style={[s.card, s.rowc, { marginTop: 8 }]}>
-        <View style={[s.avatarS, { width: 56, height: 56, backgroundColor: catOf(store).c }]}><Ico n={catOf(store).i} c="#fff" z={30} /></View>
+        <Foto uri={store.image_url} w={56} r={12} bg={catOf(store).c} icon={catOf(store).i} />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[s.h, { marginBottom: 2 }]}>{store.name}</Text>
           <Text numberOfLines={1} style={{ color: '#666' }}>{catOf(store).t} • {store.address}</Text>
@@ -142,7 +160,7 @@ export function Cliente({ me, email }: any) {
       <Text style={s.h}>Productos</Text>
       {prods.map((p) => (
         <View key={p.id} style={[s.card, s.row]}>
-          <View style={{ flex: 1 }}><Text style={s.b}>{p.name}</Text><Text style={{ color: G, fontWeight: '800' }}>{money(p.price)}</Text></View>
+          {!!p.image_url && <Foto uri={p.image_url} w={56} r={10} />}<View style={{ flex: 1, marginLeft: p.image_url ? 10 : 0 }}><Text style={s.b}>{p.name}</Text><Text style={{ color: G, fontWeight: '800' }}>{money(p.price)}</Text></View>
           {cart[p.id] > 0 ? (
             <View style={s.rowc}>
               <T onPress={() => setQty(p.id, -1)} style={s.qbtn}><Ico n="minus" c="#fff" z={20} /></T>
@@ -170,7 +188,29 @@ export function Cliente({ me, email }: any) {
           <Text style={{ color: pay === 'electronic' ? '#fff' : N, fontWeight: '800' }}>Pago electrónico</Text></T>
       </View>
       <Text style={{ color: '#666', fontSize: 12, marginBottom: 10 }}>{pay === 'electronic' ? 'Se abrirá la página segura de Wompi para pagar con tarjeta, PSE o Nequi.' : 'Pagas en efectivo al recibir tu pedido.'}</Text>
-      <Inp placeholder="Tu dirección de entrega" value={addr} onChangeText={setAddr} />
+      <T onPress={() => { const v = !noAddr; setNoAddr(v); if (v && !pin) getPos().then((c) => c && setPin(c)); }} style={[s.rowc, { marginBottom: 8 }]}>
+        <Ico n={noAddr ? 'checkbox-marked' : 'checkbox-blank-outline'} c={noAddr ? G : '#7A8A94'} z={24} />
+        <Text style={{ marginLeft: 8, flex: 1 }}>Mi lugar no tiene dirección (sin nomenclatura)</Text>
+      </T>
+      <Inp placeholder={noAddr ? 'Cómo llegar (ej: casa azul, frente a la cancha)' : 'Tu dirección de entrega'} value={addr} onChangeText={setAddr} />
+      {noAddr && (
+        <View style={{ marginBottom: 10 }}>
+          <Text style={{ color: '#666', fontSize: 12, marginBottom: 6 }}>Toca el mapa o arrastra el pin hasta tu puerta. El repartidor verá este punto exacto.</Text>
+          {!!pin && <Text style={{ color: '#888', fontSize: 11 }}>Punto marcado: {pin.latitude.toFixed(5)}, {pin.longitude.toFixed(5)}</Text>}
+          <T onPress={() => getPos().then((c) => c && setPin(c))} style={{ marginBottom: 6 }}><Text style={{ color: '#1E6BFF', fontWeight: '700' }}>Usar mi ubicación actual</Text></T>
+          {pin ? (
+            <MapView style={{ height: 220, borderRadius: 12 }} initialRegion={{ ...pin, latitudeDelta: 0.004, longitudeDelta: 0.004 }} onPress={(e: any) => setPin(e.nativeEvent.coordinate)}>
+              <Marker draggable coordinate={pin} onDragEnd={(e: any) => setPin(e.nativeEvent.coordinate)} pinColor={G} title="Aquí entregamos" />
+            </MapView>
+          ) : <Text>Buscando tu ubicación…</Text>}
+        </View>)}
+      <View style={{ marginBottom: 10 }}>
+        <T onPress={async () => { const f = await tomarFotoLugar(me.id); if (f) setLugarFoto(f); }} style={[s.chip2, { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }]}>
+          <Ico n="camera-outline" c={N} z={18} /><Text style={{ marginLeft: 6, fontWeight: '700', color: N }}>{lugarFoto ? 'Cambiar foto del lugar' : (noAddr ? 'Tomar foto del lugar (recomendado)' : 'Agregar foto del lugar (opcional)')}</Text>
+        </T>
+        {!!lugarFoto && <Image source={{ uri: lugarFoto.uri }} style={{ width: '100%', height: 160, borderRadius: 12, marginTop: 6 }} />}
+        <Text style={{ color: '#888', fontSize: 11, marginTop: 4 }}>La foto solo la ve el repartidor que lleva tu pedido. Ayuda a encontrar tu puerta.</Text>
+      </View>
       <Btn t={sending ? 'Enviando…' : pay === 'electronic' ? 'Hacer pedido y pagar' : 'Hacer pedido'} on={sending ? () => {} : order} />
     </ScrollView>
   );
@@ -223,7 +263,7 @@ export function Cliente({ me, email }: any) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
           {favList.map((st) => (
             <T key={st.id} onPress={() => open(st)} style={{ width: 140, marginRight: 10, backgroundColor: '#F7F9FA', borderRadius: 14, overflow: 'hidden' }}>
-              <View style={{ height: 70, backgroundColor: catOf(st).c, alignItems: 'center', justifyContent: 'center' }}><Ico n={catOf(st).i} c="#fff" z={34} /></View>
+              <Foto uri={st.image_url} w={140} h={70} r={0} bg={catOf(st).c} icon={catOf(st).i} />
               <View style={{ padding: 10 }}>
                 <Text numberOfLines={1} style={s.b}>{st.name}</Text>
                 <Text style={{ color: '#666', fontSize: 12 }}>{info(stats[st.id])}</Text>
@@ -252,6 +292,20 @@ export function Cliente({ me, email }: any) {
             <Btn2 t="Enviar" on={sendReview} />
           </View>
         </View>)}
+      {claimFor && (
+        <View style={[s.card, { backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#D32F2F' }]}>
+          <Text style={s.h}>Reportar un problema</Text>
+          <Text style={s.b}>{claimFor.stores?.name} · {shortId(claimFor.id)}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+            {[['missing_item', 'Falta un producto'], ['bad_condition', 'Mal estado'], ['wrong_order', 'Pedido equivocado'], ['not_received', 'No me llegó'], ['other', 'Otro']].map(([k, t]) => (
+              <T key={k} onPress={() => setCReason(k)} style={[s.chip2, cReason === k && { backgroundColor: '#D32F2F', borderColor: '#D32F2F' }]}><Text style={{ color: cReason === k ? '#fff' : N, fontWeight: '700' }}>{t}</Text></T>))}
+          </View>
+          <Inp placeholder="Cuéntanos qué pasó" value={cDesc} onChangeText={setCDesc} />
+          <View style={{ flexDirection: 'row', marginHorizontal: -4 }}>
+            <Btn2 t="Cancelar" c="#EDEDED" tc="#555" on={() => setClaimFor(null)} />
+            <Btn2 t="Enviar" c="#D32F2F" on={sendClaim} />
+          </View>
+        </View>)}
       {!mine.length && <Text>Todavía no has hecho pedidos.</Text>}
       {mine.map((o) => (
         <View key={o.id} style={s.card}>
@@ -267,6 +321,12 @@ export function Cliente({ me, email }: any) {
           {['preparing', 'ready', 'on_way'].includes(o.status) && <Text style={{ color: '#888', fontSize: 11, marginTop: 4 }}>Ya no se puede cancelar desde la app porque el comercio ya aceptó tu pedido.</Text>}
           {!['delivered', 'cancelled', 'awaiting_payment'].includes(o.status) && <OrderMap o={o} />}
           {o.status === 'delivered' && !reviewed.includes(o.id) && <Btn t="Calificar mi pedido" on={() => { setRate(o); setRs(0); setRc(0); }} />}
+          {o.status === 'delivered' && (() => {
+            const cl = claims.find((x) => x.order_id === o.id);
+            if (cl) return <Text style={{ color: cl.status === 'OPEN' ? '#E65100' : cl.status === 'APPROVED' ? G : '#666', fontWeight: '700', marginTop: 4 }}>Reclamo: {cl.status === 'OPEN' ? 'en revisión' : cl.status === 'APPROVED' ? `aprobado, reembolso ${money(cl.refund_amount)}` : 'no aprobado'}</Text>;
+            if (o.delivered_at && Date.now() - new Date(o.delivered_at).getTime() < 24 * 3600 * 1000) return <T onPress={() => { setClaimFor(o); setCReason(''); setCDesc(''); }}><Text style={{ color: '#D32F2F', fontWeight: '700', marginTop: 6 }}>Reportar un problema</Text></T>;
+            return null;
+          })()}
           {o.status === 'delivered' && reviewed.includes(o.id) && <Text style={{ color: G, fontWeight: '700', marginTop: 4 }}>✓ Ya calificaste este pedido</Text>}
         </View>))}
     </ScrollView>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Switch, ScrollView, Alert } from 'react-native';
+import { View, Text, Switch, ScrollView, Alert, Image, Linking } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { supabase as sb } from './supabase';
@@ -11,6 +11,7 @@ export function Repartidor({ me, email }: any) {
   const [online, setOnline] = useState(false);
   const [pos, setPos] = useState<any>(null);
   const [hidden, setHidden] = useState<string[]>([]);
+  const [fotoLugar, setFotoLugar] = useState<string | null>(null);
   const [bal, setBal] = useState<any>(null);
   const [movs, setMovs] = useState<any[]>([]);
   const [liqs, setLiqs] = useState<any[]>([]);
@@ -58,6 +59,12 @@ export function Repartidor({ me, email }: any) {
     if (!data?.length) Alert.alert('Ya no está disponible', 'Otro repartidor lo tomó.');
     reload();
   }
+  async function verFoto(path: string) {
+    const { data, error } = await sb.storage.from('entregas').createSignedUrl(path, 600);
+    if (error || !data?.signedUrl) return say(error || 'No se pudo abrir la foto');
+    setFotoLugar(data.signedUrl);
+  }
+  const abrirMapa = (lat: number, lng: number) => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
   async function done(id: string) { const { error } = await sb.from('orders').update({ status: 'delivered' }).eq('id', id); if (error) say(error); reload(); loadFin(); }
   const avail = orders.filter((o) => o.status === 'ready' && !o.courier_id && !hidden.includes(o.id));
   const entregas = orders.filter((o) => o.courier_id === me.id && o.status === 'delivered');
@@ -70,7 +77,7 @@ export function Repartidor({ me, email }: any) {
     if (active.dest_lat != null) line.push({ latitude: active.dest_lat, longitude: active.dest_lng });
   }
   const pend = bal?.courier_earnings_pending || 0, cash = bal?.cash_pending || 0, neto = pend - cash;
-  const KL: any = { courier_earning: 'Ganancia por domicilio', courier_cash_pending: 'Efectivo recibido por conciliar' };
+  const KL: any = { courier_earning: 'Ganancia por domicilio', courier_cash_pending: 'Efectivo recibido por conciliar', adjustment: 'Ajuste por reclamo' };
   let body: any;
   if (tab === 'mapa') body = (
     <MapView ref={mapRef} style={{ flex: 1 }} initialRegion={pos ? { ...pos, latitudeDelta: 0.03, longitudeDelta: 0.03 } : DEF} showsUserLocation>
@@ -122,6 +129,10 @@ export function Repartidor({ me, email }: any) {
           <View style={s.rowc}><Ico n="map-marker" c={O} z={20} /><Text style={{ marginLeft: 8, flex: 1 }}>1. Recoge en: {active.stores?.name} — {active.stores?.address}</Text></View>
           <View style={[s.rowc, { marginVertical: 6 }]}><Ico n="home-outline" c={B} z={20} /><Text style={{ marginLeft: 8, flex: 1 }}>2. Entrega en: {active.address}</Text></View>
           {active.payment_method === 'cash' && <View style={{ backgroundColor: '#FFF3E0', borderRadius: 10, padding: 10, marginVertical: 6 }}><Text style={{ fontWeight: '800', color: '#E65100' }}>Cobra {money(active.total)} en efectivo al cliente</Text></View>}
+          {active.stores?.lat != null && <Btn t="Ir al comercio (Google Maps)" c="#1E6BFF" on={() => abrirMapa(active.stores.lat, active.stores.lng)} />}
+          {active.dest_lat != null && <Btn t="Ir al cliente (Google Maps)" c="#1E6BFF" on={() => abrirMapa(active.dest_lat, active.dest_lng)} />}
+          {!!active.dest_photo_path && <Btn t="Ver foto del lugar" c="#6C4BD6" on={() => verFoto(active.dest_photo_path)} />}
+          {!!fotoLugar && <View><Image source={{ uri: fotoLugar }} style={{ width: '100%', height: 220, borderRadius: 12, marginTop: 8 }} /><Btn t="Cerrar foto" c="#7A8A94" on={() => setFotoLugar(null)} /></View>}
           <Btn t="Marcar como entregado" on={() => done(active.id)} />
         </View>)}
       {online && !active && <>

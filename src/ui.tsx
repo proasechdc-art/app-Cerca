@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity as T, ScrollView, StyleSheet, Alert, Platform, StatusBar as RNStatusBar } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity as T, ScrollView, StyleSheet, Alert, Platform, Image, Linking, StatusBar as RNStatusBar } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons as MCI } from '@expo/vector-icons';
 import { supabase as sb } from './supabase';
 
@@ -49,7 +50,10 @@ export const CT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: '
 export const MT = [{ k: 'inicio', t: 'Inicio', i: 'home' }, { k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'productos', t: 'Productos', i: 'storefront-outline' }, { k: 'stats', t: 'Estadísticas', i: 'chart-bar' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 export const RT = [{ k: 'pedidos', t: 'Pedidos', i: 'shopping-outline' }, { k: 'mapa', t: 'Mapa', i: 'map-outline' }, { k: 'ganancias', t: 'Ganancias', i: 'cash' }, { k: 'perfil', t: 'Perfil', i: 'account-outline' }];
 
-export const AT = [{ k: 'resumen', t: 'Resumen', i: 'view-dashboard-outline' }, { k: 'liquidar', t: 'Liquidar', i: 'cash-multiple' }, { k: 'liquidaciones', t: 'Historial', i: 'file-document-outline' }, { k: 'auditoria', t: 'Auditoría', i: 'shield-check-outline' }, { k: 'ajustes', t: 'Ajustes', i: 'cog-outline' }];
+export const AT = [{ k: 'resumen', t: 'Resumen', i: 'view-dashboard-outline' }, { k: 'liquidar', t: 'Liquidar', i: 'cash-multiple' }, { k: 'liquidaciones', t: 'Historial', i: 'file-document-outline' }, { k: 'auditoria', t: 'Auditoría', i: 'shield-check-outline' }, { k: 'reclamos', t: 'Reclamos', i: 'alert-circle-outline' }, { k: 'ajustes', t: 'Ajustes', i: 'cog-outline' }];
+export const URL_WEB = 'https://proasechdc-art.github.io/cerquita-web/';
+export const TERMS_VERSION = '2026-10';
+export const abrirWeb = (p: string) => Linking.openURL(URL_WEB + p);
 export const money = (n: number) => '$' + Number(n).toLocaleString('es-CO');
 export const say = (e: any) => Alert.alert('Ups', String(e?.message || e));
 export const shortId = (id: string) => '#' + id.slice(0, 4).toUpperCase();
@@ -98,6 +102,38 @@ export function useOrders(): [any[], () => Promise<void>] {
   return [rows, load];
 }
 
+// Elige una foto de la galería, la sube a Supabase (carpeta propia) y devuelve su dirección pública
+export async function subirFoto(uid: string, aspect: [number, number] = [1, 1]): Promise<string | null> {
+  try {
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect, quality: 0.5, base64: true });
+    if (r.canceled || !r.assets?.[0]?.base64) return null;
+    const bytes = Uint8Array.from(atob(r.assets[0].base64), (c) => c.charCodeAt(0));
+    const path = `${uid}/${Date.now()}.jpg`;
+    const { error } = await sb.storage.from('fotos').upload(path, bytes, { contentType: 'image/jpeg' });
+    if (error) { say(error); return null; }
+    return sb.storage.from('fotos').getPublicUrl(path).data.publicUrl;
+  } catch (e) { say(e); return null; }
+}
+// Abre la cámara, sube la foto del lugar a un almacenamiento privado y devuelve su ruta
+export async function tomarFotoLugar(uid: string): Promise<{ path: string; uri: string } | null> {
+  try {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permiso necesario', 'Permite el uso de la cámara para tomar la foto del lugar.'); return null; }
+    const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.4, base64: true });
+    if (r.canceled || !r.assets?.[0]?.base64) return null;
+    const a = r.assets[0];
+    const bytes = Uint8Array.from(atob(a.base64 as string), (c) => c.charCodeAt(0));
+    const path = `${uid}/${Date.now()}.jpg`;
+    const { error } = await sb.storage.from('entregas').upload(path, bytes, { contentType: 'image/jpeg' });
+    if (error) { say(error); return null; }
+    return { path, uri: a.uri };
+  } catch (e) { say(e); return null; }
+}
+export const Foto = ({ uri, w = 44, h, r = 12, bg = '#E5E9EC', icon = 'storefront-outline', ic = '#fff' }: any) => (
+  uri
+    ? <Image source={{ uri }} style={{ width: w, height: h || w, borderRadius: r, backgroundColor: '#EEE' }} />
+    : <View style={{ width: w, height: h || w, borderRadius: r, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Ico n={icon} c={ic} z={Math.round(w * 0.5)} /></View>
+);
 export const Ico = ({ n, c = N, z = 24 }: any) => <MCI name={n} size={z} color={c} />;
 export const Chip = ({ st }: any) => <View style={{ backgroundColor: CHIP[st][0], paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' }}><Text style={{ color: CHIP[st][1], fontWeight: '800', fontSize: 12 }}>{LBL[st]}</Text></View>;
 export const Btn = ({ t, on, c = G }: any) => <T style={[s.btn, { backgroundColor: c }]} onPress={on}><Text style={s.btnT}>{t}</Text></T>;
@@ -140,6 +176,14 @@ export function TabBar({ tabs, tab, go }: any) {
   );
 }
 
+async function borrarArchivos(uid: string) {
+  for (const b of ['fotos', 'entregas']) {
+    try {
+      const { data } = await sb.storage.from(b).list(uid, { limit: 1000 });
+      if (data?.length) await sb.storage.from(b).remove(data.map((f: any) => `${uid}/${f.name}`));
+    } catch {}
+  }
+}
 export function Perfil({ me, email }: any) {
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -149,7 +193,20 @@ export function Perfil({ me, email }: any) {
         <Text style={{ color: '#555' }}>{email}</Text>
         <Text style={{ color: O, fontWeight: '800', marginTop: 4, textTransform: 'capitalize' }}>{me.role}</Text>
       </View>
+      <View style={{ marginBottom: 14 }}>
+        <T onPress={() => abrirWeb('privacidad.html')} style={{ paddingVertical: 8 }}><Text style={{ color: '#1E6BFF', fontWeight: '700' }}>Política de privacidad</Text></T>
+        <T onPress={() => abrirWeb('terminos.html')} style={{ paddingVertical: 8 }}><Text style={{ color: '#1E6BFF', fontWeight: '700' }}>Términos y condiciones</Text></T>
+        <T onPress={() => abrirWeb('eliminar-cuenta.html')} style={{ paddingVertical: 8 }}><Text style={{ color: '#1E6BFF', fontWeight: '700' }}>Cómo eliminar mi cuenta</Text></T>
+      </View>
       <Btn t="Cerrar sesión" on={() => sb.auth.signOut()} c={O} />
+      <T style={{ marginTop: 18, alignItems: 'center' }} onPress={() => Alert.alert('Eliminar mi cuenta', 'Se borrarán tus datos personales y no podrás volver a entrar con esta cuenta. Los registros de pedidos y pagos se conservan sin tu nombre. ¿Quieres continuar?', [
+        { text: 'No' },
+        { text: 'Sí, eliminar', style: 'destructive', onPress: async () => {
+          const { error } = await sb.rpc('delete_my_account');
+          if (error) say(error); else { await borrarArchivos(me.id); Alert.alert('Cuenta eliminada', 'Tu cuenta fue eliminada.'); sb.auth.signOut(); }
+        } }])}>
+        <Text style={{ color: '#D32F2F', fontWeight: '700' }}>Eliminar mi cuenta</Text>
+      </T>
     </ScrollView>
   );
 }

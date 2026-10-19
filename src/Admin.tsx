@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, Switch } from 'react-native';
 import { supabase as sb } from './supabase';
 import { s, G, N, O, AT, money, say, ago, Btn, Btn2, Inp, Stat, Logo, TabBar } from './ui';
 
@@ -10,6 +10,7 @@ const AUD: any = {
   payout_paid: 'Pago al beneficiario confirmado', settlement_closed: 'Liquidación cerrada', settlement_cancelled: 'Liquidación cancelada',
   settings_changed: 'Tarifas cambiadas', order_cancelled: 'Pedido cancelado', refund_confirmed: 'Reembolso confirmado', payment_approved_after_cancel: 'Pago recibido de un pedido cancelado', admin_role_assigned: 'Rol de administrador asignado',
 };
+const RSN: any = { missing_item: 'Falta un producto', bad_condition: 'Producto en mal estado', wrong_order: 'Pedido equivocado', not_received: 'No le llegó', other: 'Otro problema' };
 export function Admin({ me, email }: any) {
   const [tab, setTab] = useState('resumen');
   const [sum, setSum] = useState<any>(null);
@@ -18,7 +19,17 @@ export function Admin({ me, email }: any) {
   const [logs, setLogs] = useState<any[]>([]);
   const [com, setCom] = useState('');
   const [fee, setFee] = useState('');
+  const [tAcc, setTAcc] = useState('');
+  const [tPay, setTPay] = useState('');
+  const [tCou, setTCou] = useState('');
+  const [tGra, setTGra] = useState('');
+  const [tAfter, setTAfter] = useState(false);
   const [ref, setRef] = useState('');
+  const [claims, setClaims] = useState<any[]>([]);
+  const [sel, setSel] = useState<string | null>(null);
+  const [cAmt, setCAmt] = useState('');
+  const [cFault, setCFault] = useState('merchant');
+  const [cNote, setCNote] = useState('');
   const [refs, setRefs] = useState<any[]>([]);
   const load = useCallback(async () => {
     const [a, b, c, d, e] = await Promise.all([
@@ -28,9 +39,13 @@ export function Admin({ me, email }: any) {
     ]);
     setSum(a.data); setPend(b.data || []); setSetts(c.data || []); setLogs(d.data || []);
     sb.rpc('admin_refunds').then(({ data }) => setRefs(data || []));
-    if (e.data) { setCom(String(e.data.commission_pct)); setFee(String(e.data.courier_fee)); }
+    if (e.data) {
+      setCom(String(e.data.commission_pct)); setFee(String(e.data.courier_fee));
+      setTAcc(String(e.data.accept_timeout_minutes)); setTPay(String(e.data.payment_timeout_minutes)); setTCou(String(e.data.courier_timeout_minutes));
+      setTGra(String(e.data.cancel_grace_minutes)); setTAfter(!!e.data.client_cancel_after_accept);
+    }
   }, []);
-  useEffect(() => { load(); }, [tab]);
+  useEffect(() => { load(); sb.rpc('admin_claims').then(({ data }) => setClaims(data || [])); }, [tab]);
   const run = async (p: any, ok: string) => { const { error } = await p; if (error) say(error); else Alert.alert('Listo', ok); load(); };
   const sure = (t: string, f: () => void) => Alert.alert(t, '¿Confirmas?', [{ text: 'No' }, { text: 'Sí', onPress: f }]);
   const who = (x: any) => x.name?.trim() || x.email;
@@ -98,6 +113,39 @@ export function Admin({ me, email }: any) {
         </View>))}
     </ScrollView>
   );
+  else if (tab === 'reclamos') body = (
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+      <Text style={s.h}>Reclamos</Text>
+      {!claims.length && <Text>No hay reclamos.</Text>}
+      {claims.map((c) => (
+        <View key={c.id} style={[s.card, c.status === 'OPEN' && { backgroundColor: '#FFF8F1' }]}>
+          <View style={s.row}><Text style={s.b}>{RSN[c.reason] || c.reason}</Text><Text style={{ fontWeight: '800', color: c.status === 'OPEN' ? O : c.status === 'APPROVED' ? G : '#666' }}>{c.status === 'OPEN' ? 'ABIERTO' : c.status === 'APPROVED' ? 'APROBADO' : 'RECHAZADO'}</Text></View>
+          <Text>{c.store_name} · {c.email} · pedido {money(c.order_total)}</Text>
+          {!!c.description && <Text style={{ color: '#444', marginVertical: 4 }}>"{c.description}"</Text>}
+          <Text style={{ color: '#888', fontSize: 11 }}>{ago(c.created_at)}{c.courier_email ? ` · repartidor ${c.courier_email}` : ''}</Text>
+          {c.status !== 'OPEN' && <Text style={{ color: '#666', marginTop: 4 }}>Reembolso {money(c.refund_amount || 0)} · asume: {c.fault}{c.admin_note ? ` · ${c.admin_note}` : ''}</Text>}
+          {c.status === 'OPEN' && sel !== c.id && <Btn t="Resolver" on={() => { setSel(c.id); setCAmt(String(c.order_total)); setCFault('merchant'); setCNote(''); }} />}
+          {c.status === 'OPEN' && sel === c.id && <>
+            <Text style={[s.b, { marginTop: 8 }]}>Valor a reembolsar (0 = rechazar el reclamo)</Text>
+            <Inp keyboardType="number-pad" value={cAmt} onChangeText={setCAmt} />
+            <Text style={s.b}>¿Quién asume el costo?</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {[['merchant', 'Comercio'], ['courier', 'Repartidor'], ['cerquita', 'Cerquita']].map(([k, t]) => (
+                <T key={k} onPress={() => setCFault(k)} style={[s.chip2, cFault === k && { backgroundColor: G, borderColor: G }]}><Text style={{ color: cFault === k ? '#fff' : N, fontWeight: '700' }}>{t}</Text></T>))}
+            </View>
+            <Inp placeholder="Nota (opcional)" value={cNote} onChangeText={setCNote} />
+            <View style={{ flexDirection: 'row', marginHorizontal: -4 }}>
+              <Btn2 t="Cancelar" c="#EDEDED" tc="#555" on={() => setSel(null)} />
+              <Btn2 t="Guardar decisión" on={() => sure('Guardar la decisión', async () => {
+                await run(sb.rpc('resolve_claim', { p_claim: c.id, p_refund: parseInt(cAmt) || 0, p_fault: (parseInt(cAmt) || 0) > 0 ? cFault : 'none', p_note: cNote.trim() || null }), 'Decisión guardada');
+                setSel(null);
+                sb.rpc('admin_claims').then(({ data }) => setClaims(data || []));
+              })} />
+            </View>
+          </>}
+        </View>))}
+    </ScrollView>
+  );
   else if (tab === 'auditoria') body = (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
       <Text style={s.h}>Auditoría</Text>
@@ -118,6 +166,21 @@ export function Admin({ me, email }: any) {
       <Inp keyboardType="number-pad" value={fee} onChangeText={setFee} />
       <Text style={{ color: '#666', fontSize: 12, marginBottom: 6 }}>Los cambios solo aplican a pedidos nuevos. Los anteriores conservan su valor.</Text>
       <Btn t="Guardar tarifas" on={() => sure('Cambiar tarifas', () => run(sb.rpc('set_finance_settings', { p_commission: parseFloat(com), p_fee: parseInt(fee) }), 'Tarifas actualizadas'))} />
+      <Text style={[s.h, { marginTop: 24 }]}>Reglas de cancelación</Text>
+      <Text style={s.b}>Minutos para que el comercio acepte el pedido</Text>
+      <Inp keyboardType="number-pad" value={tAcc} onChangeText={setTAcc} />
+      <Text style={s.b}>Minutos para completar el pago electrónico</Text>
+      <Inp keyboardType="number-pad" value={tPay} onChangeText={setTPay} />
+      <Text style={s.b}>Minutos para conseguir repartidor (pedido listo)</Text>
+      <Inp keyboardType="number-pad" value={tCou} onChangeText={setTCou} />
+      <View style={[s.row, { marginVertical: 8 }]}>
+        <Text style={{ flex: 1, fontWeight: '700', marginRight: 10 }}>El cliente puede cancelar después de que el comercio acepta</Text>
+        <Switch value={tAfter} onValueChange={setTAfter} trackColor={{ true: G }} />
+      </View>
+      <Text style={s.b}>Minutos de gracia para cancelar después de aceptar</Text>
+      <Inp keyboardType="number-pad" value={tGra} onChangeText={setTGra} />
+      <Text style={{ color: '#666', fontSize: 12, marginBottom: 6 }}>Los cambios aplican de inmediato a los pedidos que están en curso y a los nuevos.</Text>
+      <Btn t="Guardar reglas de cancelación" on={() => sure('Cambiar las reglas de cancelación', () => run(sb.rpc('set_cancel_settings', { p_accept: parseInt(tAcc), p_payment: parseInt(tPay), p_courier: parseInt(tCou), p_grace: parseInt(tGra) || 0, p_after: tAfter }), 'Reglas actualizadas'))} />
       <Text style={[s.h, { marginTop: 24 }]}>Mi cuenta</Text>
       <Text style={{ marginBottom: 8 }}>{email} · administrador</Text>
       <Btn t="Cerrar sesión" on={() => sb.auth.signOut()} c={O} />

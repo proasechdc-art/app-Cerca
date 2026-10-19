@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity as T, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase as sb } from './src/supabase';
-import { s, G, N, O, TOP, say, Logo, Btn, Inp } from './src/ui';
+import { s, G, N, O, TOP, say, Logo, Btn, Inp, Ico, TERMS_VERSION, abrirWeb } from './src/ui';
 import { Cliente } from './src/Cliente';
 import { Comercio } from './src/Comercio';
 import { Repartidor } from './src/Repartidor';
@@ -13,8 +13,10 @@ function Auth() {
   const [signup, setSignup] = useState(false);
   const [role, setRole] = useState('cliente');
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
+  const [ok, setOk] = useState(false);
   async function go() {
-    const r = signup ? await sb.auth.signUp({ email: email.trim(), password: pw, options: { data: { role, name } } })
+    if (signup && !ok) return say('Debes aceptar los términos y la política de privacidad para crear tu cuenta.');
+    const r = signup ? await sb.auth.signUp({ email: email.trim(), password: pw, options: { data: { role, name, terms_version: TERMS_VERSION } } })
                      : await sb.auth.signInWithPassword({ email: email.trim(), password: pw });
     if (r.error) say(r.error);
   }
@@ -30,8 +32,48 @@ function Auth() {
         </View></>}
       <Inp placeholder="Correo" keyboardType="email-address" value={email} onChangeText={setEmail} />
       <Inp placeholder="Contraseña" secureTextEntry value={pw} onChangeText={setPw} />
+      {signup && (
+        <View style={{ width: '100%', marginBottom: 10 }}>
+          <T onPress={() => setOk(!ok)} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <Ico n={ok ? 'checkbox-marked' : 'checkbox-blank-outline'} c={ok ? G : '#9FB3BF'} z={24} />
+            <Text style={{ color: '#fff', marginLeft: 8, flex: 1, fontSize: 12 }}>Soy mayor de 18 años y acepto los términos y condiciones y la política de privacidad y tratamiento de datos.</Text>
+          </T>
+          <View style={{ flexDirection: 'row', marginLeft: 32, marginTop: 4 }}>
+            <T onPress={() => abrirWeb('terminos.html')}><Text style={{ color: '#7FD6A3', fontSize: 12, textDecorationLine: 'underline', marginRight: 14 }}>Ver términos</Text></T>
+            <T onPress={() => abrirWeb('privacidad.html')}><Text style={{ color: '#7FD6A3', fontSize: 12, textDecorationLine: 'underline' }}>Ver política de privacidad</Text></T>
+          </View>
+        </View>)}
       <Btn t={signup ? 'Crear cuenta' : 'Entrar'} on={go} />
       <T onPress={() => setSignup(!signup)}><Text style={{ color: '#fff', marginTop: 16 }}>{signup ? 'Ya tengo cuenta' : 'Crear cuenta nueva'}</Text></T>
+    </SafeAreaView>
+  );
+}
+
+function Consent({ onOk }: any) {
+  const [ok, setOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function aceptar() {
+    setBusy(true);
+    const { error } = await sb.rpc('accept_terms', { p_version: TERMS_VERSION });
+    setBusy(false);
+    if (error) return say(error);
+    onOk();
+  }
+  return (
+    <SafeAreaView style={[s.center, { backgroundColor: N }]}>
+      <Logo light k={1.3} />
+      <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 24, textAlign: 'center' }}>Antes de continuar</Text>
+      <Text style={{ color: '#D5E6EE', textAlign: 'center', marginVertical: 10 }}>Para usar Cerquita necesitamos que aceptes los términos y condiciones y la política de privacidad y tratamiento de datos.</Text>
+      <View style={{ flexDirection: 'row', marginBottom: 14 }}>
+        <T onPress={() => abrirWeb('terminos.html')}><Text style={{ color: '#7FD6A3', textDecorationLine: 'underline', marginRight: 16 }}>Ver términos</Text></T>
+        <T onPress={() => abrirWeb('privacidad.html')}><Text style={{ color: '#7FD6A3', textDecorationLine: 'underline' }}>Ver política de privacidad</Text></T>
+      </View>
+      <T onPress={() => setOk(!ok)} style={{ flexDirection: 'row', alignItems: 'flex-start', width: '100%', marginBottom: 12 }}>
+        <Ico n={ok ? 'checkbox-marked' : 'checkbox-blank-outline'} c={ok ? G : '#9FB3BF'} z={24} />
+        <Text style={{ color: '#fff', marginLeft: 8, flex: 1 }}>Soy mayor de 18 años y acepto los términos y la política.</Text>
+      </T>
+      <Btn t={busy ? 'Guardando…' : 'Aceptar y continuar'} on={() => (ok ? aceptar() : say('Marca la casilla para continuar.'))} />
+      <T onPress={() => sb.auth.signOut()}><Text style={{ color: '#fff', marginTop: 16 }}>Cerrar sesión</Text></T>
     </SafeAreaView>
   );
 }
@@ -69,6 +111,7 @@ function Root() {
       {!!perr && <Btn t="Salir" on={() => sb.auth.signOut()} c={O} />}
     </SafeAreaView>
   );
+  if (me.terms_version !== TERMS_VERSION) return <Consent onOk={() => setMe({ ...me, terms_version: TERMS_VERSION })} />;
   const View_ = me.role === 'cliente' ? Cliente : me.role === 'comercio' ? Comercio : me.role === 'admin' ? Admin : Repartidor;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff', paddingTop: Math.max(TOP, ins.top), paddingBottom: ins.bottom }}>
