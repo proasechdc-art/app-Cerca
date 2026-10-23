@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, Alert, Switch, TouchableOpacity as T } from 'react-native';
 import { supabase as sb } from './supabase';
 import { s, G, N, O, AT, money, say, ago, Btn, Btn2, Inp, Stat, Logo, TabBar } from './ui';
 
