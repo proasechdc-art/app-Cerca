@@ -53,7 +53,7 @@ export function Admin({ me, email }: any) {
   if (tab === 'resumen') body = (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
       <Text style={s.h}>Resumen financiero</Text>
-      {!sum && <Text>Cargando… (si no carga, esta cuenta no es administradora)</Text>}
+      {!sum && <Text>Cargando…</Text>}
       {!!sum && <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Stat i="cash-multiple" c={G} v={money(sum.cerquita_revenue)} l="Ingresos Cerquita" />
         <Stat i="shopping-outline" c={O} v={money(sum.sales_total)} l="Ventas totales" />
