@@ -184,11 +184,49 @@ async function borrarArchivos(uid: string) {
     } catch {}
   }
 }
+function AvatarPerfil({ me }: any) {
+  const [url, setUrl] = useState<string | null>(me.avatar_url || null);
+  const [bz, setBz] = useState(false);
+  const editable = me.role === 'repartidor';
+  async function cambiar(fuente: 'camara' | 'galeria') {
+    try {
+      const opts: any = { mediaTypes: ['images'], quality: 0.5, base64: true, allowsEditing: true, aspect: [1, 1] };
+      let r: any;
+      if (fuente === 'camara') {
+        const p = await ImagePicker.requestCameraPermissionsAsync();
+        if (!p.granted) return Alert.alert('Permiso necesario', 'Permite el uso de la cámara para tomar la foto.');
+        r = await ImagePicker.launchCameraAsync({ ...opts, cameraType: ImagePicker.CameraType.front });
+      } else r = await ImagePicker.launchImageLibraryAsync(opts);
+      if (r.canceled || !r.assets?.[0]?.base64) return;
+      setBz(true);
+      const bytes = Uint8Array.from(atob(r.assets[0].base64), (c) => c.charCodeAt(0));
+      const path = `${me.id}/avatar-${Date.now()}.jpg`;
+      const up = await sb.storage.from('fotos').upload(path, bytes, { contentType: 'image/jpeg' });
+      if (up.error) throw up.error;
+      const nueva = sb.storage.from('fotos').getPublicUrl(path).data.publicUrl;
+      const { error } = await sb.rpc('set_my_avatar', { p_url: nueva });
+      if (error) { await sb.storage.from('fotos').remove([path]); throw error; }
+      const vieja = url?.split('/fotos/')[1];
+      if (vieja && vieja.startsWith(`${me.id}/avatar-`)) await sb.storage.from('fotos').remove([vieja]);
+      setUrl(nueva);
+    } catch (e) { say(e); } finally { setBz(false); }
+  }
+  return (
+    <T disabled={!editable || bz} activeOpacity={0.8} style={{ alignItems: 'center' }}
+      onPress={() => Alert.alert('Foto de perfil', 'Elige cómo quieres subirla', [
+        { text: 'Tomar selfie', onPress: () => cambiar('camara') },
+        { text: 'Elegir de la galería', onPress: () => cambiar('galeria') },
+        { text: 'Cancelar', style: 'cancel' }])}>
+      {url ? <Image source={{ uri: url }} style={s.avatar} /> : <View style={s.avatar}><Ico n="account" c="#fff" z={40} /></View>}
+      {editable && <Text style={{ color: B, fontWeight: '700', marginTop: 6 }}>{bz ? 'Subiendo…' : url ? 'Cambiar foto' : 'Subir foto'}</Text>}
+    </T>
+  );
+}
 export function Perfil({ me, email }: any) {
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       <View style={[s.card, { alignItems: 'center', paddingVertical: 24 }]}>
-        <View style={s.avatar}><Ico n="account" c="#fff" z={40} /></View>
+        <AvatarPerfil me={me} />
         <Text style={[s.h, { marginTop: 10, marginBottom: 2 }]}>{me.name || 'Mi cuenta'}</Text>
         <Text style={{ color: '#555' }}>{email}</Text>
         <Text style={{ color: O, fontWeight: '800', marginTop: 4, textTransform: 'capitalize' }}>{me.role}</Text>
