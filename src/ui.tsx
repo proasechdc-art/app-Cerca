@@ -177,7 +177,7 @@ export function TabBar({ tabs, tab, go }: any) {
 }
 
 async function borrarArchivos(uid: string) {
-  for (const b of ['fotos', 'entregas']) {
+  for (const b of ['fotos', 'entregas', 'documentos']) {
     try {
       const { data } = await sb.storage.from(b).list(uid, { limit: 1000 });
       if (data?.length) await sb.storage.from(b).remove(data.map((f: any) => `${uid}/${f.name}`));
