@@ -6,7 +6,7 @@ import { supabase as sb } from './src/supabase';
 import { s, G, N, O, TOP, say, Logo, Btn, Inp, Ico, TERMS_VERSION, abrirWeb } from './src/ui';
 import { Cliente } from './src/Cliente';
 import { Comercio } from './src/Comercio';
-import { Repartidor } from './src/Repartidor';
+import { RepartidorConPermiso as Repartidor } from './src/DocumentosRepartidor';
 import { Admin } from './src/Admin';
 
 function Auth() {
