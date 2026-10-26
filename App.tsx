@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity as T, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity as T, SafeAreaView, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase as sb } from './src/supabase';
@@ -14,6 +14,12 @@ function Auth() {
   const [role, setRole] = useState('cliente');
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
   const [ok, setOk] = useState(false);
+  async function recuperar() {
+    if (!email.trim()) return say('Escribe tu correo en el campo de arriba y vuelve a tocar "¿Olvidaste tu contraseña?".');
+    const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: 'https://proasechdc-art.github.io/cerquita-web/restablecer.html' });
+    if (error) return say(error);
+    Alert.alert('Revisa tu correo', 'Si ese correo está registrado, te enviamos un enlace para crear una nueva contraseña. Revisa también la carpeta de spam.');
+  }
   async function go() {
     if (signup && !ok) return say('Debes aceptar los términos y la política de privacidad para crear tu cuenta.');
     const r = signup ? await sb.auth.signUp({ email: email.trim(), password: pw, options: { data: { role, name, terms_version: TERMS_VERSION } } })
@@ -44,6 +50,7 @@ function Auth() {
           </View>
         </View>)}
       <Btn t={signup ? 'Crear cuenta' : 'Entrar'} on={go} />
+      {!signup && <T onPress={recuperar}><Text style={{ color: '#7FD6A3', marginTop: 14, textDecorationLine: 'underline' }}>¿Olvidaste tu contraseña?</Text></T>}
       <T onPress={() => setSignup(!signup)}><Text style={{ color: '#fff', marginTop: 16 }}>{signup ? 'Ya tengo cuenta' : 'Crear cuenta nueva'}</Text></T>
     </SafeAreaView>
   );
