@@ -53,6 +53,16 @@ export function Repartidor({ me, email }: any) {
     return () => { dead = true; sub?.remove(); };
   }, [online]);
   async function accept(id: string) {
+    const ped = orders.find((x) => x.id === id);
+    if (ped?.payment_method === 'cash') {
+      const { data: b } = await sb.rpc('my_balance');
+      setBal(b);
+      const saldo = (b?.courier_earnings_pending || 0) - (b?.cash_pending || 0);
+      if (saldo < Number(ped.total || 0)) {
+        Alert.alert('Saldo insuficiente', `Este pedido es en efectivo por ${money(ped.total)} y tu saldo disponible es ${money(Math.max(saldo, 0))}. Cuando Cerquita te liquide o acumules más ganancias podrás tomar pedidos en efectivo de ese valor.`);
+        return;
+      }
+    }
     const { data, error } = await sb.from('orders').update({ courier_id: me.id, status: 'on_way', courier_lat: pos?.latitude, courier_lng: pos?.longitude })
       .eq('id', id).is('courier_id', null).eq('status', 'ready').select();
     if (error) return say(error);
@@ -66,7 +76,14 @@ export function Repartidor({ me, email }: any) {
   }
   const abrirMapa = (lat: number, lng: number) => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
   async function done(id: string) { const { error } = await sb.from('orders').update({ status: 'delivered' }).eq('id', id); if (error) say(error); reload(); loadFin(); }
-  const avail = orders.filter((o) => o.status === 'ready' && !o.courier_id && !hidden.includes(o.id));
+  const pend = bal?.courier_earnings_pending || 0, cash = bal?.cash_pending || 0, neto = pend - cash;
+  // REGLA: un pedido en efectivo solo se ofrece al repartidor cuyo saldo disponible
+  // (ganancias que Cerquita aún no le ha liquidado, menos el efectivo que ya tiene por entregar)
+  // sea igual o mayor al valor del pedido. Los pedidos con pago electrónico se ofrecen a todos.
+  const saldoOk = (o: any) => o.payment_method !== 'cash' || neto >= Number(o.total || 0);
+  const libres = orders.filter((o) => o.status === 'ready' && !o.courier_id && !hidden.includes(o.id));
+  const avail = libres.filter(saldoOk);
+  const bloqueados = libres.length - avail.length;
   const entregas = orders.filter((o) => o.courier_id === me.id && o.status === 'delivered');
   const entregasHoy = entregas.filter((o) => isToday(o.created_at)).length;
   const gananciasHoy = movs.filter((m) => m.kind === 'courier_earning' && isToday(m.created_at)).reduce((a, m) => a + m.amount, 0);
@@ -76,7 +93,6 @@ export function Repartidor({ me, email }: any) {
     if (active.stores?.lat != null) line.push({ latitude: active.stores.lat, longitude: active.stores.lng });
     if (active.dest_lat != null) line.push({ latitude: active.dest_lat, longitude: active.dest_lng });
   }
-  const pend = bal?.courier_earnings_pending || 0, cash = bal?.cash_pending || 0, neto = pend - cash;
   const KL: any = { courier_earning: 'Ganancia por domicilio', courier_cash_pending: 'Efectivo recibido por conciliar', adjustment: 'Ajuste por reclamo' };
   let body: any;
   if (tab === 'mapa') body = (
@@ -151,6 +167,7 @@ export function Repartidor({ me, email }: any) {
               <Btn2 t="Aceptar" on={() => accept(o.id)} />
             </View>
           </View>))}
+        {bloqueados > 0 && <View style={{ backgroundColor: '#FFF3E0', borderRadius: 12, padding: 12, marginBottom: 10 }}><Text style={{ color: '#E65100', fontWeight: '700' }}>{bloqueados === 1 ? 'Hay 1 pedido en efectivo que no puedes tomar' : `Hay ${bloqueados} pedidos en efectivo que no puedes tomar`}: tu saldo disponible ({money(Math.max(neto, 0))}) es menor al valor del pedido.</Text></View>}
         {!avail.length && <Text>Todavía no hay pedidos listos. Aparecen aquí cuando el comercio los marca como "Listo para recoger".</Text>}
       </>}
     </ScrollView>
